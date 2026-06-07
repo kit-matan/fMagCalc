@@ -43,7 +43,10 @@ def main():
     import sympy as sp
     from sympy import lambdify
     sys.path.insert(0, os.path.join(REPO, "python"))
-    from fmagcalc import run_sqw
+    # Use the subprocess driver explicitly: it reports compute_seconds (kernel
+    # time excluding I/O) which the scaling table needs.
+    from fmagcalc._bin import run_sqw
+    from fmagcalc._capi import run_sqw as run_sqw_inproc
 
     calc = build_calc()
     n, S = int(calc.nspins), float(calc.spin_magnitude)
@@ -90,9 +93,20 @@ def main():
 
     print(f"\n=== fMagCalc M3 benchmark — KFe3J, {n} spins ({2*n}x{2*n}), Nq={args.nq} ===")
     print(f"parity vs pyMagCalc: max|dI|={err:.2e}  max rel={rel:.2e}\n")
+    # In-process ctypes path (no file I/O): end-to-end call wall time.
+    os.environ["OMP_NUM_THREADS"] = str(max(int(x) for x in args.threads.split(",")))
+    t0 = time.perf_counter()
+    ri = run_sqw_inproc(hp, hm, Ud, ff, S, q_grid)
+    t_inproc = time.perf_counter() - t0
+    err_ip = np.nanmax(np.abs(ri["intensities"] - py_I))
+
     print(f"H-stack build (Python lambdify, one-time) : {t_build:8.3f} s")
     print(f"pyMagCalc calculate_sqw (multiprocessing) : {t_py:8.3f} s  "
-          f"({args.nq / t_py:,.0f} q/s)\n")
+          f"({args.nq / t_py:,.0f} q/s)")
+    print(f"Fortran in-process (ctypes, no file I/O)  : {t_inproc:8.4f} s  "
+          f"({args.nq / t_inproc:,.0f} q/s)  parity max|dI|={err_ip:.2e}")
+    print(f"  -> full S(Q,w) via fMagCalc end-to-end  : {t_build + t_inproc:8.3f} s  "
+          f"({t_py / (t_build + t_inproc):.1f}x vs pyMagCalc)\n")
     print(f"{'threads':>7} | {'compute(s)':>10} | {'exe wall(s)':>11} | {'q/s (compute)':>13} | {'speedup vs py':>13}")
     print("-" * 70)
     base_compute = None

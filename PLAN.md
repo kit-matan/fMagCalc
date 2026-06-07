@@ -161,8 +161,15 @@ Watch the subtle parts when porting `linalg.py`:
   than pyMagCalc's multiprocessing run, parity preserved (ΔI ~ 8e-13). See
   [docs/BENCHMARK.md](docs/BENCHMARK.md). (Scaling caps ~4 threads at this tiny
   6×6 size — larger cells will scale further.)
-- **M4 — Python wrapper**: `fmagcalc.run_dispersion(...)` / `run_sqw(...)`
-  returning the same `DispersionResult`/`SqwResult` shapes pyMagCalc uses.
+- **M4 — in-process wrapper** ✅ `bind(C)` shared library (`magcalc_capi.f90` →
+  `libfmagcalc`) called via ctypes (`python/fmagcalc/_capi.py`); now the default
+  backend (`fmagcalc.backend == "ctypes"`), with the subprocess driver as
+  fallback. Zero file I/O. Parity tests pass unchanged through it; full S(Q,ω)
+  end-to-end is **~6.6× faster than pyMagCalc** (H-build in Python + in-process
+  kernel). Chose ctypes over f2py because CMake already links Accelerate+OpenMP
+  cleanly. (`run_*` still return plain arrays/dicts; wrapping them in
+  `DispersionResult`/`SqwResult` is a thin follow-up if pyMagCalc integration
+  (M7) wants it.)
 - **M5 — benchmark**: head-to-head timing vs pyMagCalc on a large q-grid;
   document speedup.
 - **M6 (optional) — Phase 2 model export** and powder-average loop.

@@ -47,13 +47,19 @@ The full Bogoliubov `KKdMatrix` pipeline (two-stage sort, degenerate-block QR,
 α metric, +q/−q matching+phase) is ported and the intensity contraction
 matches.
 
-**Speed (M3, KFe3J / 8000 q-points, parity preserved):** the OpenMP compute
-kernel is **18× faster single-threaded** and **95× at 10 threads** than
-pyMagCalc's multiprocessing `calculate_sqw` — the win is eliminating Python
-per-q overhead (GIL, `multiprocessing`, per-q `lambdify`), since both call the
-same LAPACK. See [docs/BENCHMARK.md](docs/BENCHMARK.md). Next: in-process f2py
-path (M4) to drop the file round-trip. See [PLAN.md](PLAN.md) and
+**Speed (KFe3J / 8000 q-points, parity preserved):** the OpenMP compute kernel
+is **18–100× faster** than pyMagCalc's multiprocessing `calculate_sqw` — the win
+is eliminating Python per-q overhead (GIL, `multiprocessing`, per-q `lambdify`),
+since both call the same LAPACK. Called **in-process via ctypes** (M4, the
+default backend — no file round-trip), the full S(Q,ω) end-to-end is **~6.6×
+faster**. See [docs/BENCHMARK.md](docs/BENCHMARK.md), [PLAN.md](PLAN.md),
 [docs/INTERFACE.md](docs/INTERFACE.md).
+
+```python
+import fmagcalc                       # backend == "ctypes" when libfmagcalc is built
+r = fmagcalc.run_sqw(h_plus, h_minus, ud, ff, S, q_grid)
+r["energies"], r["intensities"]       # (Nq, N) each
+```
 
 Try it:
 ```bash

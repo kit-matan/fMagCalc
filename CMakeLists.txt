@@ -6,6 +6,10 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
+# Position-independent code so the static core can be linked into the shared
+# library used by the in-process (ctypes) path.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -march=native")
 set(CMAKE_Fortran_FLAGS_DEBUG   "-O0 -g -fcheck=all -fbacktrace -Wall")
 
@@ -33,6 +37,11 @@ target_link_libraries(fmagcalc_disp PRIVATE magcalc_core)
 
 add_executable(fmagcalc_sqw src/main_sqw.f90)
 target_link_libraries(fmagcalc_sqw PRIVATE magcalc_core)
+
+# Shared library for the in-process ctypes path (libfmagcalc.{dylib,so}).
+add_library(fmagcalc_shared SHARED src/magcalc_capi.f90)
+target_link_libraries(fmagcalc_shared PRIVATE magcalc_core)
+set_target_properties(fmagcalc_shared PROPERTIES OUTPUT_NAME fmagcalc)
 
 # --- Tests ------------------------------------------------------------------
 enable_testing()

@@ -58,8 +58,25 @@ at 2 / 4 / 8 / 10 threads.
   excludes all file I/O and is the right number for the scaling study. The
   file round-trip itself disappears with the in-process f2py path (M4).
 
+## In-process path (M4)
+The numbers above time the standalone `fmagcalc_sqw` exe (subprocess + binary
+files). The default backend is now the **in-process ctypes path** (libfmagcalc
+shared library, no file I/O). End-to-end for the full S(Q,ω) at Nq=8000:
+
+| step | time |
+|------|------|
+| H-stack build (Python `lambdify`, one-time) | 0.55 s |
+| Fortran in-process kernel (ctypes, all threads) | 0.14 s |
+| **fMagCalc end-to-end** | **0.68 s** |
+| pyMagCalc `calculate_sqw` | 4.48 s |
+
+→ **~6.6× faster end-to-end**, parity preserved (max |ΔI| = 8e-13). The ratio is
+bounded here by the Python H-build (0.55 s); it rises with larger grids (the
+build amortizes) and would shrink further with a Phase-2 model export that
+builds H(q) in Fortran (PLAN §2).
+
 ## Caveat / next step
 This is a small-matrix regime that flatters overhead elimination. A fair
 follow-up is to benchmark a larger model (more spins) to characterize the
-crossover, and to repeat once the M4 f2py path removes the file I/O from the
-end-to-end number.
+crossover. Thread scaling is overhead-bound at 6×6 and run-to-run noisy beyond
+~4 threads; don't over-read the high-thread points.
