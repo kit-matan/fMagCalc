@@ -8,7 +8,7 @@ module magcalc_driver
    use magcalc_diag,  only: eig_zgeev
    implicit none
    private
-   public :: run_dispersion, run_sqw
+   public :: run_dispersion
 
 contains
 
@@ -45,23 +45,6 @@ contains
          x = ieee_value(0.0_dp, ieee_quiet_nan)
       end function ieee_nan
    end subroutine run_dispersion
-
-   !> S(Q,w) over a q-grid. STUB until magcalc_kkd is implemented (M2).
-   subroutine run_sqw(n, nq, h_plus, h_minus, ud, ff, s, energies, intensities, info)
-      integer,          intent(in)  :: n, nq
-      complex(kind=cp), intent(in)  :: h_plus(2*n, 2*n, nq)
-      complex(kind=cp), intent(in)  :: h_minus(2*n, 2*n, nq)
-      complex(kind=cp), intent(in)  :: ud(3*n, 3*n)
-      real(kind=dp),    intent(in)  :: ff(n, nq)
-      real(kind=dp),    intent(in)  :: s
-      real(kind=dp),    intent(out) :: energies(n, nq)
-      real(kind=dp),    intent(out) :: intensities(n, nq)
-      integer,          intent(out) :: info(nq)
-
-      energies = 0.0_dp
-      intensities = 0.0_dp
-      info = -99   ! not implemented yet
-   end subroutine run_sqw
 
    !> Simple ascending insertion sort (m is small: 2N). Replace with a heap/
    !> quicksort if 2N grows large.

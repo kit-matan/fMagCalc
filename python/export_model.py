@@ -86,6 +86,63 @@ def export_phase1_dispersion(args) -> dict:
     return dict(n=n, S=S, q_grid=q_grid, H_plus=h_plus, energies=energies)
 
 
+def export_phase1_sqw(args) -> dict:
+    """S(Q,w) fixture: inputs (H_plus, H_minus, Ud, ff), pyMagCalc's oracle
+    outputs (energies, intensities), AND the KKdMatrix intermediates
+    (K, Kd, eigvals) so the Fortran Bogoliubov port can be validated step by
+    step rather than only on the final intensity."""
+    import sympy as sp
+    from sympy import lambdify
+    from magcalc.linalg import KKdMatrix
+    from magcalc.numerical import process_calc_Sqw, _init_worker
+    from magcalc.form_factors import get_form_factor
+
+    calc = _make_calc(args)
+    n = int(calc.nspins)
+    S = float(calc.spin_magnitude)
+    Ud = np.asarray(calc.Ud_numeric, dtype=np.complex128)
+
+    ion_list = calc.sm.ion_list() if hasattr(calc.sm, "ion_list") else None
+
+    lam = [s for s in calc.full_symbol_list if isinstance(s, sp.Symbol)]
+    hfunc = lambdify(lam, calc.HMat_sym, modules=["numpy"], cse=True)
+    # process_calc_Sqw uses the module-global lambdified function.
+    _init_worker(calc.HMat_sym, lam)
+
+    q_grid = build_q_grid(args.nq, args.seed)
+    nq = args.nq
+    base = [S] + list(calc.hamiltonian_params)
+
+    h_plus = np.empty((nq, 2 * n, 2 * n), dtype=np.complex128)
+    h_minus = np.empty_like(h_plus)
+    ff = np.ones((nq, n), dtype=np.float64)
+    K = np.empty((nq, 3 * n, 2 * n), dtype=np.complex128)
+    Kd = np.empty_like(K)
+    eigvals = np.empty((nq, 2 * n), dtype=np.complex128)
+    energies = np.full((nq, n), np.nan)
+    intensities = np.full((nq, n), np.nan)
+
+    for i, q in enumerate(q_grid):
+        h_plus[i] = np.asarray(hfunc(*(list(q) + base)), dtype=np.complex128)
+        h_minus[i] = np.asarray(hfunc(*(list(-q) + base)), dtype=np.complex128)
+        if ion_list:
+            qmag = float(np.linalg.norm(q))
+            ff[i] = [get_form_factor(ion_list[j], qmag) for j in range(n)]
+
+        Kq, Kdq, ev = KKdMatrix(S, h_plus[i], h_minus[i], Ud, np.asarray(q, float), n)
+        K[i], Kd[i], eigvals[i] = Kq, Kdq, ev
+
+        _, en, inten = process_calc_Sqw((Ud, np.asarray(q, float), n, S, list(calc.hamiltonian_params), ion_list))
+        energies[i], intensities[i] = en, inten
+
+    if np.abs(h_plus).max() == 0.0:
+        raise RuntimeError("Exported Hamiltonian is identically zero — trivial fixture.")
+
+    return dict(n=n, S=S, q_grid=q_grid, H_plus=h_plus, H_minus=h_minus, Ud=Ud,
+                ff=ff, energies=energies, intensities=intensities,
+                K=K, Kd=Kd, eigvals=eigvals)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Export pyMagCalc oracle fixtures for fMagCalc")
     ap.add_argument("--pymagcalc", default="../pyMagCalc")
@@ -98,6 +155,7 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--nq", type=int, default=48)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--task", choices=["disp", "sqw"], default="disp")
     args = ap.parse_args()
 
     if not args.config and not args.model_dir:
@@ -106,12 +164,15 @@ def main() -> None:
     import logging
     logging.disable(logging.WARNING)
 
-    data = export_phase1_dispersion(args)
+    data = (export_phase1_sqw if args.task == "sqw" else export_phase1_dispersion)(args)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     np.savez_compressed(args.out, **data)
-    print(f"[export_model] n={data['n']} S={data['S']} Nq={len(data['q_grid'])} "
+    extra = ""
+    if args.task == "sqw":
+        extra = f" I_range=[{np.nanmin(data['intensities']):.3f},{np.nanmax(data['intensities']):.3f}]"
+    print(f"[export_model] task={args.task} n={data['n']} S={data['S']} Nq={len(data['q_grid'])} "
           f"H_absmax={np.abs(data['H_plus']).max():.3f} "
-          f"E_range=[{np.nanmin(data['energies']):.3f},{np.nanmax(data['energies']):.3f}] "
+          f"E_range=[{np.nanmin(data['energies']):.3f},{np.nanmax(data['energies']):.3f}]{extra} "
           f"-> {args.out}")
 
 

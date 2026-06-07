@@ -17,10 +17,13 @@ import tempfile
 import numpy as np
 
 
-def _default_exe() -> str:
+def _build_dir() -> str:
     here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(here))
-    return os.path.join(repo, "build", "fmagcalc_disp")
+    return os.path.join(os.path.dirname(os.path.dirname(here)), "build")
+
+
+def _default_exe() -> str:
+    return os.path.join(_build_dir(), "fmagcalc_disp")
 
 
 def run_dispersion(h_plus: np.ndarray, exe: str | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -69,3 +72,61 @@ def run_dispersion(h_plus: np.ndarray, exe: str | None = None) -> tuple[np.ndarr
             info = np.frombuffer(f.read(4 * out_nq), dtype="<i4").copy()
 
     return energies, info
+
+
+def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, exe: str | None = None):
+    """Run the Fortran S(Q,w) driver on a q-grid.
+
+    Args mirror docs/INTERFACE.md (all NumPy, q-first stacking):
+        h_plus, h_minus : complex (Nq, 2N, 2N)
+        ud              : complex (3N, 3N)
+        ff              : float   (Nq, N)
+        S               : float
+        q_grid          : float   (Nq, 3)
+
+    Returns dict with energies (Nq,N), intensities (Nq,N), info (Nq,) and the
+    intermediates K, Kd (Nq, 3N, 2N) and eigvals (Nq, 2N).
+    """
+    exe = exe or os.path.join(_build_dir(), "fmagcalc_sqw")
+    if not os.path.exists(exe):
+        raise FileNotFoundError(f"fmagcalc_sqw not built: {exe}")
+
+    hp = np.ascontiguousarray(h_plus, dtype=np.complex128)
+    hm = np.ascontiguousarray(h_minus, dtype=np.complex128)
+    nq, two_n, _ = hp.shape
+    n = two_n // 2
+
+    def fbytes(a):  # logical Fortran-order bytes
+        return np.asfortranarray(a).tobytes(order="F")
+
+    with tempfile.TemporaryDirectory() as td:
+        in_path = os.path.join(td, "sqw_in.bin")
+        out_path = os.path.join(td, "sqw_out.bin")
+        with open(in_path, "wb") as f:
+            f.write(struct.pack("<i", n))
+            f.write(struct.pack("<i", nq))
+            f.write(struct.pack("<d", float(S)))
+            f.write(fbytes(np.ascontiguousarray(ud, dtype=np.complex128)))      # (3N,3N)
+            f.write(fbytes(np.moveaxis(hp, 0, -1)))                              # (2N,2N,Nq)
+            f.write(fbytes(np.moveaxis(hm, 0, -1)))                             # (2N,2N,Nq)
+            f.write(fbytes(np.ascontiguousarray(q_grid, dtype=np.float64).T))   # (3,Nq)
+            f.write(fbytes(np.ascontiguousarray(ff, dtype=np.float64).T))       # (N,Nq)
+
+        subprocess.run([exe, in_path, out_path], check=True, capture_output=True, text=True)
+
+        with open(out_path, "rb") as f:
+            out_nq = struct.unpack("<i", f.read(4))[0]
+            out_n = struct.unpack("<i", f.read(4))[0]
+            ne = out_n * out_nq
+            energies = np.frombuffer(f.read(8 * ne), dtype="<f8").reshape(out_nq, out_n, order="C").copy()
+            intensities = np.frombuffer(f.read(8 * ne), dtype="<f8").reshape(out_nq, out_n, order="C").copy()
+            info = np.frombuffer(f.read(4 * out_nq), dtype="<i4").copy()
+            nK = 3 * out_n * 2 * out_n * out_nq
+            K = np.frombuffer(f.read(16 * nK), dtype="<c16").reshape(3 * out_n, 2 * out_n, out_nq, order="F")
+            K = np.moveaxis(K, 2, 0).copy()
+            Kd = np.frombuffer(f.read(16 * nK), dtype="<c16").reshape(3 * out_n, 2 * out_n, out_nq, order="F")
+            Kd = np.moveaxis(Kd, 2, 0).copy()
+            nev = 2 * out_n * out_nq
+            eigvals = np.frombuffer(f.read(16 * nev), dtype="<c16").reshape(2 * out_n, out_nq, order="F").T.copy()
+
+    return dict(energies=energies, intensities=intensities, info=info, K=K, Kd=Kd, eigvals=eigvals)

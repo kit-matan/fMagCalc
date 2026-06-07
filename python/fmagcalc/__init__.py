@@ -15,8 +15,4 @@ __all__ = ["run_dispersion", "run_sqw"]
 # M1: dispersion is served by the standalone Fortran exe over a binary file
 # (see _bin.py). M4 will swap this for an in-process f2py extension behind the
 # same signature.
-from ._bin import run_dispersion
-
-
-def run_sqw(*_args, **_kwargs):
-    raise NotImplementedError("S(Q,w) backend lands at milestone M2 (see PLAN.md).")
+from ._bin import run_dispersion, run_sqw  # noqa: F401

@@ -149,7 +149,13 @@ Watch the subtle parts when porting `linalg.py`:
   (3 spins, 6×6, 48 q-points) to **3e-14** (machine precision). Oracle fixture
   exported by `python/export_model.py`; parity checked by
   `tests/test_dispersion_parity.py` (wired into `ctest`).
-- **M2 — S(Q,ω) parity**: full KKd pipeline matches `process_calc_Sqw`.
+- **M2 — S(Q,ω) parity** ✅ full `KKdMatrix` pipeline ported
+  (`magcalc_kkd.f90`) + intensity contraction (`magcalc_sqw.f90`), driven by
+  `fmagcalc_sqw`. Energies match to 3e-14 and **intensities to 8e-14 abs /
+  3e-13 rel** on KFe3J. K/Kd themselves differ by the arbitrary per-eigenvector
+  phase LAPACK assigns (gauge freedom); the intensity is the gauge-invariant
+  bilinear of them and is what the parity test asserts
+  (`tests/test_sqw_parity.py`, in `ctest`).
 - **M3 — OpenMP**: thread the q-loop; verify scaling and bitwise-stable results.
 - **M4 — Python wrapper**: `fmagcalc.run_dispersion(...)` / `run_sqw(...)`
   returning the same `DispersionResult`/`SqwResult` shapes pyMagCalc uses.

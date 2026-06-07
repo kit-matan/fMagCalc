@@ -34,16 +34,27 @@ serialization dominate at scale. A Fortran core with `zgeev` inside an OpenMP
 
 ## Status
 
-🟢 **M1 — dispersion parity achieved.** The Fortran `zgeev` dispersion path
-reproduces pyMagCalc's energies on the KFe3J example (3 spins, 6×6, 48 q-points)
-to **3e-14** (machine precision). S(Q,ω) (M2) is next; see [PLAN.md](PLAN.md) for
-milestones and [docs/INTERFACE.md](docs/INTERFACE.md) for the data contract.
+🟢 **M1 (dispersion) + M2 (S(Q,ω)) parity achieved** on the KFe3J example
+(3 spins, 6×6, 48 q-points), all vs pyMagCalc as oracle:
+
+| Quantity      | max error vs pyMagCalc |
+|---------------|------------------------|
+| dispersion E  | 3e-14                  |
+| S(Q,ω) E      | 3e-14                  |
+| S(Q,ω) I      | 8e-14 abs / 3e-13 rel  |
+
+The full Bogoliubov `KKdMatrix` pipeline (two-stage sort, degenerate-block QR,
+α metric, +q/−q matching+phase) is ported and the intensity contraction
+matches. Next: OpenMP scaling study (M3), then an in-process f2py path (M4).
+See [PLAN.md](PLAN.md) and [docs/INTERFACE.md](docs/INTERFACE.md).
 
 Try it:
 ```bash
 cmake -S . -B build && cmake --build build -j
 python python/export_model.py --model-dir ../pyMagCalc/examples/KFe3J \
     --model-module spin_model --out python/fixtures/kfe3j_disp.npz
+python python/export_model.py --task sqw --model-dir ../pyMagCalc/examples/KFe3J \
+    --model-module spin_model --out python/fixtures/kfe3j_sqw.npz
 ctest --test-dir build --output-on-failure
 ```
 
