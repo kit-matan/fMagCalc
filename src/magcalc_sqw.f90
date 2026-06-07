@@ -14,6 +14,14 @@ module magcalc_sqw
    public :: run_sqw, run_sqw_model
 
    real(kind=dp), parameter :: Q_ZERO_THRESHOLD = 1.0e-10_dp
+   ! Zero-energy (Goldstone) modes carry no well-defined inelastic intensity:
+   ! their eigenvectors span the null space of the para-unitary metric, so the
+   ! Bogoliubov normalization (alpha = sqrt(G_ii/N_ii)) is ill-conditioned and
+   ! the resulting intensity depends on the arbitrary degenerate eigenbasis — a
+   ! machine-epsilon change in H(q) (e.g. the model-path reconstruction) flips
+   ! it from 0 to a spurious finite value, producing vertical streaks in S(Q,w).
+   ! Suppress these modes; |E| below this (meV) is treated as zero.
+   real(kind=dp), parameter :: ENERGY_ZERO_THRESHOLD = 1.0e-3_dp
 
 contains
 
@@ -146,6 +154,8 @@ contains
          end do
          intensities(mode) = real(acc, dp)
          if (intensities(mode) < 0.0_dp) intensities(mode) = 0.0_dp
+         ! Suppress ill-conditioned zero-energy (Goldstone) modes.
+         if (abs(energies(mode)) < ENERGY_ZERO_THRESHOLD) intensities(mode) = 0.0_dp
       end do
    end subroutine sqw_intensity
 

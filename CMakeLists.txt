@@ -83,4 +83,10 @@ if(PYTEST_EXE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dispersion_pari
       COMMAND ${PYTEST_EXE} -q ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pymagcalc_integration.py
     )
   endif()
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_streak_regression.py")
+    add_test(
+      NAME streak_regression
+      COMMAND ${PYTEST_EXE} -q ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_streak_regression.py
+    )
+  endif()
 endif()

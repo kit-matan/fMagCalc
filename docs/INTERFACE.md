@@ -65,7 +65,17 @@ EIGENVECTOR_MATCHING_THRESHOLD    = 1e-4
 ENERGY_IMAG_PART_THRESHOLD        = 1e-5
 SQW_IMAG_PART_THRESHOLD           = 1e-4
 Q_ZERO_THRESHOLD                  = 1e-10
+ENERGY_ZERO_THRESHOLD             = 1e-3   # fMagCalc-only (see below)
 ```
+
+`ENERGY_ZERO_THRESHOLD` has no pyMagCalc counterpart. Modes with `|E| <` this
+(meV) are zero-energy Goldstone modes whose Bogoliubov normalization is
+ill-conditioned (null vectors of the para-unitary metric); their intensity
+depends on the arbitrary degenerate eigenbasis and a machine-epsilon change in
+H(q) — which the model-path reconstruction introduces — flips it from 0 to a
+spurious `~3S`, producing vertical streaks in S(Q,ω). fMagCalc suppresses these
+modes' (physically ill-defined) inelastic intensity, which both removes the
+artifact and matches what pyMagCalc's exact-H path returns in practice (0).
 
 The metric is `G = diag(1,…,1, −1,…,−1)` (N positive, N negative). The boson map
 `Udd` uses `1/I = -i`: rows `3i → (i:+1, i+N:+1)`, rows `3i+1 → (i:-i, i+N:+i)`.
