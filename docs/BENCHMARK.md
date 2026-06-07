@@ -1,4 +1,44 @@
-# Benchmark — fMagCalc vs pyMagCalc (M3)
+# Benchmark — fMagCalc vs pyMagCalc
+
+## Real-calculation profile (the integration path)
+
+The numbers users actually get: pyMagCalc `calculate_dispersion` /
+`calculate_sqw` with `backend="numpy"` vs `backend="fortran"`. The Fortran
+backend uses the **exact-H path** (builds H(q) in Python via `lambdify`,
+diagonalizes + contracts in Fortran/OpenMP), which is what the GUI/runner call.
+All runs OMP across all cores; NumPy uses its `multiprocessing.Pool`.
+
+| Model | Matrix | Nq | Quantity | NumPy | Fortran | Speedup | Parity |
+|-------|--------|----|----------|-------|---------|---------|--------|
+| KFe3J | 6×6   | 3001 | dispersion | 3.17 s | 0.12 s | **27×** | ΔE 3e-8 |
+| KFe3J | 6×6   | 3001 | S(Q,ω)     | 3.58 s | 0.23 s | **16×** | ΔI 2e-12 |
+| CVO   | 32×32 | 800  | dispersion | 19.5 s | 2.3 s  | **8.4×** | ΔE 2e-13 |
+| CVO   | 32×32 | 800  | S(Q,ω)     | 16.1 s | 2.7 s  | **6.0×** | ΔI 4e-10 |
+
+Reading it:
+- **Small cell (6×6):** ~15–35×. `cProfile` of the NumPy path shows ~all the
+  time in `multiprocessing.connection.recv` / pool teardown — it is
+  **overhead-bound**, not compute-bound, so eliminating the Python per-q
+  dispatch dominates the win.
+- **Larger cell (32×32):** ~6–8×. Here the LAPACK eigensolve dominates and both
+  backends call LAPACK, so the gain narrows to OpenMP threading + removing the
+  multiprocessing IPC, minus the shared Python `lambdify` H-build (a real
+  fraction of the Fortran end-to-end time).
+- Parity is machine-precision-ish throughout (ΔE/ΔI ≤ ~1e-8), so the speedups
+  compare equal answers.
+
+Reproduce: `python /tmp/profile_real.py` style — drive `calc.calculate_*(qg,
+backend=...)` both ways and compare (see git history of this change).
+
+---
+
+## Micro-benchmark — Fortran kernel paths (M3)
+
+The section below isolates the Fortran kernel throughput (subprocess driver and
+the Phase-2 model path), separate from the end-to-end integration above. The
+model path (`run_sqw_model`) reaches ~112× but rebuilds H(q) from a bond
+decomposition; it is **not** the default integration path because that
+reconstruction is fragile at degenerate modes (see docs/INTERFACE.md).
 
 Reproduce with:
 ```bash
