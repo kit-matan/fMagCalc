@@ -143,9 +143,12 @@ Watch the subtle parts when porting `linalg.py`:
 
 ## 5. Milestones
 
-- **M0 — scaffold** ✅ repo, build skeleton, interface doc (this commit).
-- **M1 — dispersion parity**: Phase-1 handoff, `zgeev` + sort, matches
-  `process_calc_disp` on the CVO example. *(smallest end-to-end slice)*
+- **M0 — scaffold** ✅ repo, build skeleton, interface doc.
+- **M1 — dispersion parity** ✅ Phase-1 handoff via the `fmagcalc_disp` binary
+  driver + `zgeev` + sort, matches `process_calc_disp` on the **KFe3J** example
+  (3 spins, 6×6, 48 q-points) to **3e-14** (machine precision). Oracle fixture
+  exported by `python/export_model.py`; parity checked by
+  `tests/test_dispersion_parity.py` (wired into `ctest`).
 - **M2 — S(Q,ω) parity**: full KKd pipeline matches `process_calc_Sqw`.
 - **M3 — OpenMP**: thread the q-loop; verify scaling and bitwise-stable results.
 - **M4 — Python wrapper**: `fmagcalc.run_dispersion(...)` / `run_sqw(...)`

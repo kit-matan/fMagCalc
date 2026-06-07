@@ -34,9 +34,18 @@ serialization dominate at scale. A Fortran core with `zgeev` inside an OpenMP
 
 ## Status
 
-🚧 **Scaffold only.** See [PLAN.md](PLAN.md) for the full implementation plan and
-[docs/INTERFACE.md](docs/INTERFACE.md) for the Python↔Fortran data contract. The
-files in `src/` are stubs that establish the module layout and build.
+🟢 **M1 — dispersion parity achieved.** The Fortran `zgeev` dispersion path
+reproduces pyMagCalc's energies on the KFe3J example (3 spins, 6×6, 48 q-points)
+to **3e-14** (machine precision). S(Q,ω) (M2) is next; see [PLAN.md](PLAN.md) for
+milestones and [docs/INTERFACE.md](docs/INTERFACE.md) for the data contract.
+
+Try it:
+```bash
+cmake -S . -B build && cmake --build build -j
+python python/export_model.py --model-dir ../pyMagCalc/examples/KFe3J \
+    --model-module spin_model --out python/fixtures/kfe3j_disp.npz
+ctest --test-dir build --output-on-failure
+```
 
 ## Layout
 

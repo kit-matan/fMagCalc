@@ -12,13 +12,11 @@ from __future__ import annotations
 __version__ = "0.0.0"
 __all__ = ["run_dispersion", "run_sqw"]
 
-
-def _not_built(*_args, **_kwargs):
-    raise NotImplementedError(
-        "fMagCalc Fortran extension not built yet. Build with CMake/f2py first "
-        "(see PLAN.md milestones M1–M4)."
-    )
+# M1: dispersion is served by the standalone Fortran exe over a binary file
+# (see _bin.py). M4 will swap this for an in-process f2py extension behind the
+# same signature.
+from ._bin import run_dispersion
 
 
-run_dispersion = _not_built
-run_sqw = _not_built
+def run_sqw(*_args, **_kwargs):
+    raise NotImplementedError("S(Q,w) backend lands at milestone M2 (see PLAN.md).")
