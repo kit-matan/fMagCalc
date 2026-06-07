@@ -184,9 +184,14 @@ Watch the subtle parts when porting `linalg.py`:
   Fortran model kernel over all directions, and `nanmean`s per magnitude.
   Matches pyMagCalc to ~1e-11 over 40 magnitudes × 100 samples
   (`tests/test_powder_parity.py`, in `ctest`).
-- **M7 (optional, separate PR in pyMagCalc)**: a `backend="fortran"` opt-in flag
-  in pyMagCalc that calls this wrapper. Lives in pyMagCalc, gated + falling back
-  to the NumPy path.
+- **M7 — pyMagCalc opt-in** ✅ (on the `fortran-backend-opt-in` branch of
+  pyMagCalc, not master). `calculate_sqw(..., backend="fortran")` and
+  `calculate_powder_average(..., backend="fortran")` call `fmagcalc`
+  (`extract_bond_model` + `run_sqw_model`) and **fall back to NumPy** if the
+  package or its compiled library is absent. Default (`backend="numpy"`) is
+  unchanged; all 31 pyMagCalc tests still pass. Verified by
+  `tests/test_pymagcalc_integration.py` here (pyMagCalc-fortran == pyMagCalc-numpy
+  oracle). The only change to pyMagCalc is additive edits to `magcalc/core.py`.
 
 ---
 

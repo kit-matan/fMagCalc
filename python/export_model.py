@@ -33,6 +33,11 @@ import sys
 
 import numpy as np
 
+# extract_bond_model now lives in the package (reused by pyMagCalc's opt-in
+# backend); re-exported here so `export_model.extract_bond_model` still works.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fmagcalc._model import extract_bond_model  # noqa: E402
+
 
 def build_q_grid(nq: int, seed: int) -> np.ndarray:
     """Generic (low-symmetry) q-points keep modes non-degenerate — the cleanest
@@ -84,52 +89,6 @@ def export_phase1_dispersion(args) -> dict:
     res = calc.calculate_dispersion(q_grid, serial=True)
     energies = np.asarray(res.energies, dtype=np.float64)
     return dict(n=n, S=S, q_grid=q_grid, H_plus=h_plus, energies=energies)
-
-
-def extract_bond_model(calc):
-    """Phase-2 model export: decompose the (numeric) dynamical matrix into
-    H(q) = sum_b M_b * exp(i q.d_b), so a backend can build H(q) itself.
-
-    S and the Hamiltonian parameters are baked into the M_b (the q-loop is then
-    parameter-independent). Returns (n, S, Ud, dvec (3,nb), Mb (2n,2n,nb)).
-    """
-    import sympy as sp
-    from sympy import exp, I, Add, Mul
-
-    lam = [s for s in calc.full_symbol_list if isinstance(s, sp.Symbol)]
-    kx, ky, kz = lam[0], lam[1], lam[2]
-    subs = {lam[3]: calc.spin_magnitude}
-    for i, v in enumerate(calc.hamiltonian_params):
-        subs[lam[4 + i]] = v
-
-    n = int(calc.nspins)
-    n2 = 2 * n
-    Hn = calc.HMat_sym.subs(subs).applyfunc(
-        lambda e: sp.expand(sp.expand(e).rewrite(exp)))
-
-    bonds: dict = {}
-    for i in range(n2):
-        for j in range(n2):
-            for term in Add.make_args(sp.expand(Hn[i, j])):
-                coeff = sp.Integer(1)
-                arg = sp.Integer(0)
-                for f in Mul.make_args(term):
-                    if f.func == exp:
-                        arg += f.args[0]
-                    else:
-                        coeff *= f
-                # expand so coeff() distributes over compound args (kx & ky).
-                phase = sp.expand(arg / I)  # kx*dx + ky*dy + kz*dz
-                d = tuple(round(float(complex(phase.coeff(v)).real), 10)
-                          for v in (kx, ky, kz))
-                M = bonds.setdefault(d, np.zeros((n2, n2), complex))
-                M[i, j] += complex(coeff)
-
-    d_keys = sorted(bonds.keys())
-    nb = len(d_keys)
-    dvec = np.array(d_keys, dtype=np.float64)                 # (nb, 3)
-    Mb = np.stack([bonds[d] for d in d_keys], axis=0)         # (nb, 2n, 2n)
-    return n, float(calc.spin_magnitude), np.asarray(calc.Ud_numeric, np.complex128), dvec, Mb
 
 
 def export_bond_model(args) -> dict:

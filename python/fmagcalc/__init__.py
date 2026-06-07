@@ -22,8 +22,9 @@ from ._capi import _lib_path as _capi_lib_path
 if _os.path.exists(_capi_lib_path()):
     from ._capi import run_dispersion, run_sqw, run_sqw_model  # noqa: F401
     from ._powder import powder_average  # noqa: F401
+    from ._model import extract_bond_model  # noqa: F401
     backend = "ctypes"
-    __all__ += ["run_sqw_model", "powder_average"]
+    __all__ += ["run_sqw_model", "powder_average", "extract_bond_model"]
 else:  # pragma: no cover - exercised only without the shared lib
     from ._bin import run_dispersion, run_sqw  # noqa: F401
     backend = "subprocess"

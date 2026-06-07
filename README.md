@@ -10,10 +10,11 @@ of Python/NumPy/SciPy into a compiled, OpenMP-parallel Fortran core backed by
 LAPACK. `pyMagCalc` keeps its role as the front end: config parsing, symbolic
 Hamiltonian construction (SymPy), plotting, and the GUI.
 
-> **`fMagCalc` does not modify `pyMagCalc`.** It lives in its own repository and
-> consumes `pyMagCalc` only as a *read-only reference* for validation. Adopting
-> the Fortran backend inside `pyMagCalc` later is an opt-in change made *there*,
-> not here.
+> **`fMagCalc` does not modify `pyMagCalc` on its main branch.** It lives in its
+> own repository and consumes `pyMagCalc` only as a *read-only reference* for
+> validation. The opt-in adoption (M7) is a small additive change on a
+> *separate pyMagCalc branch* (`fortran-backend-opt-in`): `calculate_sqw(...,
+> backend="fortran")` calls fMagCalc and falls back to NumPy if it is absent.
 
 ## Why Fortran
 
