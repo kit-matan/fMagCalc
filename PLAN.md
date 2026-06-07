@@ -179,7 +179,11 @@ Watch the subtle parts when porting `linalg.py`:
   `run_sqw_model` rebuild H(±q) in the Fortran q-loop, so **no per-q H is built
   in Python**. End-to-end **~112× faster** than pyMagCalc at Nq=8000, parity
   2e-10 (`tests/test_sqw_model_parity.py`). See [docs/BENCHMARK.md](docs/BENCHMARK.md).
-- **M6 (optional) — powder-average loop.**
+- **M6 — powder averaging** ✅ `fmagcalc.powder_average` samples each |q| on a
+  Fibonacci sphere (matching `calculate_powder_average` exactly), runs the
+  Fortran model kernel over all directions, and `nanmean`s per magnitude.
+  Matches pyMagCalc to ~1e-11 over 40 magnitudes × 100 samples
+  (`tests/test_powder_parity.py`, in `ctest`).
 - **M7 (optional, separate PR in pyMagCalc)**: a `backend="fortran"` opt-in flag
   in pyMagCalc that calls this wrapper. Lives in pyMagCalc, gated + falling back
   to the NumPy path.

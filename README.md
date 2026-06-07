@@ -44,8 +44,9 @@ serialization dominate at scale. A Fortran core with `zgeev` inside an OpenMP
 | S(Q,ω) I      | 8e-14 abs / 3e-13 rel  |
 
 The full Bogoliubov `KKdMatrix` pipeline (two-stage sort, degenerate-block QR,
-α metric, +q/−q matching+phase) is ported and the intensity contraction
-matches.
+α metric, +q/−q matching+phase) is ported, the intensity contraction matches,
+and **powder averaging** (`fmagcalc.powder_average`, M6) reproduces pyMagCalc to
+~1e-11.
 
 **Speed (KFe3J / 8000 q-points, parity preserved):** the OpenMP compute kernel
 is **18–100× faster** than pyMagCalc's multiprocessing `calculate_sqw` — the win

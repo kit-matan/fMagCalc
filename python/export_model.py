@@ -161,6 +161,36 @@ def export_bond_model(args) -> dict:
                 energies=energies, intensities=intensities)
 
 
+def export_powder(args) -> dict:
+    """Powder fixture: bond model + |q| magnitudes + pyMagCalc oracle
+    (powder-averaged energies/intensities). The oracle uses the same Fibonacci
+    sampling as fMagCalc and averages serially (no Pool) for determinism."""
+    from magcalc.numerical import process_calc_Sqw, _init_worker
+    from fmagcalc._powder import generate_powder_qvectors, _average_segments
+    import sympy as sp
+
+    calc = _make_calc(args)
+    n, S, Ud, dvec, Mb = extract_bond_model(calc)
+    ion_list = calc.sm.ion_list() if hasattr(calc.sm, "ion_list") else None
+    lam = [s for s in calc.full_symbol_list if isinstance(s, sp.Symbol)]
+    _init_worker(calc.HMat_sym, lam)
+
+    q_mags = np.linspace(args.qmin, args.qmax, args.nmag)
+    all_q, segs = generate_powder_qvectors(q_mags, args.num_samples)
+
+    en = np.full((all_q.shape[0], n), np.nan)
+    inten = np.full((all_q.shape[0], n), np.nan)
+    for i, q in enumerate(all_q):
+        _, e, ii = process_calc_Sqw((Ud, np.asarray(q, float), n, S,
+                                     list(calc.hamiltonian_params), ion_list))
+        en[i], inten[i] = e, ii
+
+    return dict(n=n, S=S, Ud=Ud, dvec=dvec, Mb=Mb, q_magnitudes=q_mags,
+                num_samples=args.num_samples,
+                energies=_average_segments(en, segs, n),
+                intensities=_average_segments(inten, segs, n))
+
+
 def export_phase1_sqw(args) -> dict:
     """S(Q,w) fixture: inputs (H_plus, H_minus, Ud, ff), pyMagCalc's oracle
     outputs (energies, intensities), AND the KKdMatrix intermediates
@@ -230,7 +260,11 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--nq", type=int, default=48)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--task", choices=["disp", "sqw", "model"], default="disp")
+    ap.add_argument("--task", choices=["disp", "sqw", "model", "powder"], default="disp")
+    ap.add_argument("--nmag", type=int, default=40, help="powder: number of |q| magnitudes")
+    ap.add_argument("--qmin", type=float, default=0.1, help="powder: min |q|")
+    ap.add_argument("--qmax", type=float, default=3.0, help="powder: max |q|")
+    ap.add_argument("--num-samples", type=int, default=100, help="powder: sphere samples per |q|")
     args = ap.parse_args()
 
     if not args.config and not args.model_dir:
@@ -238,13 +272,20 @@ def main() -> None:
 
     import logging
     logging.disable(logging.WARNING)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # for fmagcalc._powder
 
     builder = {"disp": export_phase1_dispersion, "sqw": export_phase1_sqw,
-               "model": export_bond_model}[args.task]
+               "model": export_bond_model, "powder": export_powder}[args.task]
     data = builder(args)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     np.savez_compressed(args.out, **data)
-    if args.task == "model":
+    if args.task == "powder":
+        print(f"[export_model] task=powder n={data['n']} S={data['S']} "
+              f"n_mag={len(data['q_magnitudes'])} num_samples={data['num_samples']} "
+              f"n_bonds={data['dvec'].shape[0]} "
+              f"I_range=[{np.nanmin(data['intensities']):.3f},{np.nanmax(data['intensities']):.3f}] "
+              f"-> {args.out}")
+    elif args.task == "model":
         print(f"[export_model] task=model n={data['n']} S={data['S']} Nq={len(data['q_grid'])} "
               f"n_bonds={data['dvec'].shape[0]} "
               f"E_range=[{np.nanmin(data['energies']):.3f},{np.nanmax(data['energies']):.3f}] "

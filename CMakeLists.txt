@@ -71,4 +71,10 @@ if(PYTEST_EXE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dispersion_pari
       COMMAND ${PYTEST_EXE} -q ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_sqw_model_parity.py
     )
   endif()
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_powder_parity.py")
+    add_test(
+      NAME powder_parity
+      COMMAND ${PYTEST_EXE} -q ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_powder_parity.py
+    )
+  endif()
 endif()
