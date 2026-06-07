@@ -170,8 +170,10 @@ Watch the subtle parts when porting `linalg.py`:
   cleanly. (`run_*` still return plain arrays/dicts; wrapping them in
   `DispersionResult`/`SqwResult` is a thin follow-up if pyMagCalc integration
   (M7) wants it.)
-- **M5 — benchmark**: head-to-head timing vs pyMagCalc on a large q-grid;
-  document speedup.
+- **M5 — benchmark** ✅ (delivered early, folded into the M3 commit):
+  `python/benchmark.py` + [docs/BENCHMARK.md](docs/BENCHMARK.md) — head-to-head
+  timing vs pyMagCalc on a large q-grid, parity verified before timing, OpenMP
+  sweep; later extended with the M4 in-process and Phase-2 model-path numbers.
 - **Phase 2 — model export** ✅ `extract_bond_model` decomposes H into
   `Σ_b M_b e^{i q·d_b}` (13 bonds for KFe3J); `magcalc_model.f90::build_h` +
   `run_sqw_model` rebuild H(±q) in the Fortran q-loop, so **no per-q H is built
