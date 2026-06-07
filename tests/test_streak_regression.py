@@ -40,12 +40,33 @@ def test_no_zero_mode_streak():
     # q=0 (first row) must be ~0, not the spurious ~3S Goldstone streak.
     i0 = int(np.argmin(np.sum(np.asarray(d["q_grid"]) ** 2, axis=1)))
     assert np.nanmax(r["intensities"][i0]) < 1e-6, \
-        f"spurious intensity at Gamma: {r['intensities'][i0]}"
+        f"spurious intensity at Gamma (model path): {r['intensities'][i0]}"
 
     # Full-grid parity with the NumPy oracle.
     iN = d["intensities"]
     inten = np.nanmax(np.abs(r["intensities"] - iN))
-    assert inten < 1e-6, f"max |I_fortran - I_numpy| = {inten:.3e}"
+    assert inten < 1e-6, f"max |I_fortran - I_numpy| (model path) = {inten:.3e}"
+
+
+@pytest.mark.skipif(not os.path.exists(FIXTURE), reason="fixture not generated")
+@pytest.mark.skipif(not os.path.exists(LIB), reason="libfmagcalc not built")
+def test_exact_h_path_matches_numpy():
+    """The exact-H path (run_sqw on the lambdified H stacks) is what the
+    pyMagCalc integration uses. Unlike the bond-reconstructed model path, it
+    feeds the same H NumPy diagonalizes, so it must not trigger the degenerate
+    eigenbasis instability — even at Gamma."""
+    from fmagcalc import run_sqw
+
+    d = np.load(FIXTURE)
+    if "H_plus" not in d:
+        pytest.skip("fixture lacks H stacks; regenerate")
+    S = float(d["S"])
+    r = run_sqw(d["H_plus"], d["H_minus"], d["Ud"], np.ones_like(d["energies"]), S, d["q_grid"])
+
+    iN = d["intensities"]
+    both = ~(np.isnan(iN) | np.isnan(r["intensities"]))
+    inten = np.nanmax(np.abs(r["intensities"][both] - iN[both]))
+    assert inten < 1e-6, f"max |I_fortran - I_numpy| (exact-H path) = {inten:.3e}"
 
 
 if __name__ == "__main__":
