@@ -1,0 +1,23 @@
+# Build
+/build/
+*.mod
+*.smod
+*.o
+*.a
+*.so
+*.dylib
+
+# f2py / Python
+__pycache__/
+*.egg-info/
+.venv/
+venv/
+
+# Test fixtures (regenerated from pyMagCalc oracle; keep small ones explicitly)
+/python/fixtures/*.npz
+!/python/fixtures/.gitkeep
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
