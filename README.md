@@ -45,8 +45,15 @@ serialization dominate at scale. A Fortran core with `zgeev` inside an OpenMP
 
 The full Bogoliubov `KKdMatrix` pipeline (two-stage sort, degenerate-block QR,
 α metric, +q/−q matching+phase) is ported and the intensity contraction
-matches. Next: OpenMP scaling study (M3), then an in-process f2py path (M4).
-See [PLAN.md](PLAN.md) and [docs/INTERFACE.md](docs/INTERFACE.md).
+matches.
+
+**Speed (M3, KFe3J / 8000 q-points, parity preserved):** the OpenMP compute
+kernel is **18× faster single-threaded** and **95× at 10 threads** than
+pyMagCalc's multiprocessing `calculate_sqw` — the win is eliminating Python
+per-q overhead (GIL, `multiprocessing`, per-q `lambdify`), since both call the
+same LAPACK. See [docs/BENCHMARK.md](docs/BENCHMARK.md). Next: in-process f2py
+path (M4) to drop the file round-trip. See [PLAN.md](PLAN.md) and
+[docs/INTERFACE.md](docs/INTERFACE.md).
 
 Try it:
 ```bash

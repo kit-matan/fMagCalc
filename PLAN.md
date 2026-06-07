@@ -156,7 +156,11 @@ Watch the subtle parts when porting `linalg.py`:
   phase LAPACK assigns (gauge freedom); the intensity is the gauge-invariant
   bilinear of them and is what the parity test asserts
   (`tests/test_sqw_parity.py`, in `ctest`).
-- **M3 — OpenMP**: thread the q-loop; verify scaling and bitwise-stable results.
+- **M3 — OpenMP + benchmark** ✅ q-loop threaded; on KFe3J/8000 q-points the
+  compute-only kernel is **18× faster single-threaded** and **95× at 10 threads**
+  than pyMagCalc's multiprocessing run, parity preserved (ΔI ~ 8e-13). See
+  [docs/BENCHMARK.md](docs/BENCHMARK.md). (Scaling caps ~4 threads at this tiny
+  6×6 size — larger cells will scale further.)
 - **M4 — Python wrapper**: `fmagcalc.run_dispersion(...)` / `run_sqw(...)`
   returning the same `DispersionResult`/`SqwResult` shapes pyMagCalc uses.
 - **M5 — benchmark**: head-to-head timing vs pyMagCalc on a large q-grid;

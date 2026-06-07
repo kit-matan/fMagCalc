@@ -112,7 +112,11 @@ def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, exe: str | None = None):
             f.write(fbytes(np.ascontiguousarray(q_grid, dtype=np.float64).T))   # (3,Nq)
             f.write(fbytes(np.ascontiguousarray(ff, dtype=np.float64).T))       # (N,Nq)
 
-        subprocess.run([exe, in_path, out_path], check=True, capture_output=True, text=True)
+        proc = subprocess.run([exe, in_path, out_path], check=True, capture_output=True, text=True)
+        compute_seconds = float("nan")
+        for tok in proc.stdout.split():
+            if tok.startswith("compute_seconds="):
+                compute_seconds = float(tok.split("=", 1)[1])
 
         with open(out_path, "rb") as f:
             out_nq = struct.unpack("<i", f.read(4))[0]
@@ -129,4 +133,5 @@ def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, exe: str | None = None):
             nev = 2 * out_n * out_nq
             eigvals = np.frombuffer(f.read(16 * nev), dtype="<c16").reshape(2 * out_n, out_nq, order="F").T.copy()
 
-    return dict(energies=energies, intensities=intensities, info=info, K=K, Kd=Kd, eigvals=eigvals)
+    return dict(energies=energies, intensities=intensities, info=info, K=K, Kd=Kd,
+                eigvals=eigvals, compute_seconds=compute_seconds)
