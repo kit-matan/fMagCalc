@@ -46,6 +46,9 @@ def _lib():
         lib.magcalc_sqw_c.argtypes = [ci, ci, ctypes.c_double,
                                       cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp]
         lib.magcalc_sqw_c.restype = None
+        lib.magcalc_sqw_model_c.argtypes = [ci, ci, ci, ctypes.c_double,
+                                            cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp]
+        lib.magcalc_sqw_model_c.restype = None
         _LIB = lib
     return _LIB
 
@@ -87,5 +90,36 @@ def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, **_):
     _lib().magcalc_sqw_c(n, nq, float(S), _ptr(qf), _ptr(hp), _ptr(hm), _ptr(udf),
                          _ptr(fff), _ptr(energies), _ptr(intensities), _ptr(info), _ptr(evals))
 
+    return dict(energies=energies.T.copy(), intensities=intensities.T.copy(),
+                info=info.copy(), eigvals=evals.T.copy())
+
+
+def run_sqw_model(dvec, Mb, ud, ff, S, q_grid, **_):
+    """Phase-2 in-process S(Q,w): Fortran builds H(q) from the bond model, so
+    no per-q Hamiltonian stack is marshalled — only Mb (built once).
+
+    Args:
+        dvec : (nb, 3) float — bond vectors d_b.
+        Mb   : (nb, 2N, 2N) complex — coefficient matrices (S/params baked in).
+        ud   : (3N, 3N) complex.  ff: (Nq, N) float.  q_grid: (Nq, 3) float.
+    Returns dict: energies, intensities (Nq, N), info (Nq,), eigvals (Nq, 2N).
+    """
+    Mbf = np.asfortranarray(np.moveaxis(np.ascontiguousarray(Mb, np.complex128), 0, -1))  # (2N,2N,nb)
+    nb = Mbf.shape[2]
+    n = Mbf.shape[0] // 2
+    nq = np.asarray(q_grid).shape[0]
+    dvf = np.asfortranarray(np.ascontiguousarray(dvec, np.float64).T)   # (3,nb)
+    udf = np.asfortranarray(np.ascontiguousarray(ud, np.complex128))
+    qf = np.asfortranarray(np.ascontiguousarray(q_grid, np.float64).T)  # (3,Nq)
+    fff = np.asfortranarray(np.ascontiguousarray(ff, np.float64).T)     # (N,Nq)
+
+    energies = np.empty((n, nq), np.float64, order="F")
+    intensities = np.empty((n, nq), np.float64, order="F")
+    info = np.empty(nq, np.intc)
+    evals = np.empty((2 * n, nq), np.complex128, order="F")
+
+    _lib().magcalc_sqw_model_c(n, nq, nb, float(S), _ptr(qf), _ptr(dvf), _ptr(Mbf),
+                               _ptr(udf), _ptr(fff), _ptr(energies), _ptr(intensities),
+                               _ptr(info), _ptr(evals))
     return dict(energies=energies.T.copy(), intensities=intensities.T.copy(),
                 info=info.copy(), eigvals=evals.T.copy())

@@ -172,7 +172,12 @@ Watch the subtle parts when porting `linalg.py`:
   (M7) wants it.)
 - **M5 — benchmark**: head-to-head timing vs pyMagCalc on a large q-grid;
   document speedup.
-- **M6 (optional) — Phase 2 model export** and powder-average loop.
+- **Phase 2 — model export** ✅ `extract_bond_model` decomposes H into
+  `Σ_b M_b e^{i q·d_b}` (13 bonds for KFe3J); `magcalc_model.f90::build_h` +
+  `run_sqw_model` rebuild H(±q) in the Fortran q-loop, so **no per-q H is built
+  in Python**. End-to-end **~112× faster** than pyMagCalc at Nq=8000, parity
+  2e-10 (`tests/test_sqw_model_parity.py`). See [docs/BENCHMARK.md](docs/BENCHMARK.md).
+- **M6 (optional) — powder-average loop.**
 - **M7 (optional, separate PR in pyMagCalc)**: a `backend="fortran"` opt-in flag
   in pyMagCalc that calls this wrapper. Lives in pyMagCalc, gated + falling back
   to the NumPy path.

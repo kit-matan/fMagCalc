@@ -70,10 +70,24 @@ shared library, no file I/O). End-to-end for the full S(Q,ω) at Nq=8000:
 | **fMagCalc end-to-end** | **0.68 s** |
 | pyMagCalc `calculate_sqw` | 4.48 s |
 
-→ **~6.6× faster end-to-end**, parity preserved (max |ΔI| = 8e-13). The ratio is
-bounded here by the Python H-build (0.55 s); it rises with larger grids (the
-build amortizes) and would shrink further with a Phase-2 model export that
-builds H(q) in Fortran (PLAN §2).
+→ **~8× faster end-to-end** (run-to-run 6–8×), parity preserved (max |ΔI| =
+8e-13). The ratio is bounded here by the Python H-build (0.55 s).
+
+## Phase-2 model path (build H(q) in Fortran)
+The Python H-build is removed entirely: the dynamical matrix is exported once as
+its bond decomposition `H(q) = Σ_b M_b e^{i q·d_b}` (13 bonds for KFe3J) and
+Fortran reconstructs H(±q) inside the q-loop. Nothing per-q crosses from Python.
+
+| path | end-to-end (Nq=8000) | speedup | parity |
+|------|----------------------|---------|--------|
+| pyMagCalc | 5.71 s | 1× | — |
+| H-stack (M4) | 0.68 s | ~8× | 8e-13 |
+| **model (Phase 2)** | **0.051 s** | **~112×** | 2e-10 |
+
+The model path runs at ~157,000 q/s. Bond extraction is a one-time 0.54 s
+(parameter-set-specific, reusable across any q-grid). Its parity floor (~2e-10)
+is slightly looser than the H-stack path because the bond coefficients come
+through a symbolic rewrite/expand — still far inside physical tolerance.
 
 ## Caveat / next step
 This is a small-matrix regime that flatters overhead elimination. A fair

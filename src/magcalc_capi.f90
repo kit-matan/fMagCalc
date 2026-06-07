@@ -10,10 +10,10 @@ module magcalc_capi
    use, intrinsic :: iso_c_binding, only: c_int, c_double
    use magcalc_kinds,  only: dp, cp
    use magcalc_driver, only: run_dispersion
-   use magcalc_sqw,    only: run_sqw
+   use magcalc_sqw,    only: run_sqw, run_sqw_model
    implicit none
    private
-   public :: magcalc_disp_c, magcalc_sqw_c
+   public :: magcalc_disp_c, magcalc_sqw_c, magcalc_sqw_model_c
 
 contains
 
@@ -51,5 +51,23 @@ contains
       info = int(iinfo, c_int)
       deallocate(K, Kd)
    end subroutine magcalc_sqw_c
+
+   !> Phase-2: build H(q) from the bond model inside the Fortran loop. Only Mb
+   !> (2N,2N,nb) crosses the boundary, not a per-q H stack.
+   subroutine magcalc_sqw_model_c(n, nq, nb, s, qgrid, dvec, Mb, ud, ff, &
+                                  energies, intensities, info, evals) &
+         bind(C, name="magcalc_sqw_model_c")
+      integer(c_int),   value       :: n, nq, nb
+      real(c_double),   value       :: s
+      real(kind=dp),    intent(in)  :: qgrid(3, nq), dvec(3, nb), ff(n, nq)
+      complex(kind=cp), intent(in)  :: Mb(2*n, 2*n, nb), ud(3*n, 3*n)
+      real(kind=dp),    intent(out) :: energies(n, nq), intensities(n, nq)
+      integer(c_int),   intent(out) :: info(nq)
+      complex(kind=cp), intent(out) :: evals(2*n, nq)
+      integer :: iinfo(nq)
+      call run_sqw_model(n, nq, nb, real(s, dp), qgrid, dvec, Mb, ud, ff, &
+                         energies, intensities, iinfo, evals)
+      info = int(iinfo, c_int)
+   end subroutine magcalc_sqw_model_c
 
 end module magcalc_capi

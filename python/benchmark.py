@@ -47,6 +47,8 @@ def main():
     # time excluding I/O) which the scaling table needs.
     from fmagcalc._bin import run_sqw
     from fmagcalc._capi import run_sqw as run_sqw_inproc
+    from fmagcalc._capi import run_sqw_model
+    import export_model as em
 
     calc = build_calc()
     n, S = int(calc.nspins), float(calc.spin_magnitude)
@@ -105,8 +107,21 @@ def main():
           f"({args.nq / t_py:,.0f} q/s)")
     print(f"Fortran in-process (ctypes, no file I/O)  : {t_inproc:8.4f} s  "
           f"({args.nq / t_inproc:,.0f} q/s)  parity max|dI|={err_ip:.2e}")
-    print(f"  -> full S(Q,w) via fMagCalc end-to-end  : {t_build + t_inproc:8.3f} s  "
-          f"({t_py / (t_build + t_inproc):.1f}x vs pyMagCalc)\n")
+    print(f"  -> H-stack path end-to-end (M4)         : {t_build + t_inproc:8.3f} s  "
+          f"({t_py / (t_build + t_inproc):.1f}x vs pyMagCalc)")
+
+    # --- Phase-2 model path: build H(q) in Fortran; no Python H-stack ---
+    t0 = time.perf_counter()
+    _, _, Ud_m, dvec, Mb = em.extract_bond_model(calc)
+    t_extract = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    rm = run_sqw_model(dvec, Mb, Ud_m, ff, S, q_grid)
+    t_model = time.perf_counter() - t0
+    err_m = np.nanmax(np.abs(rm["intensities"] - py_I))
+    print(f"Fortran model path (build H(q) in Fortran): {t_model:8.4f} s  "
+          f"({args.nq / t_model:,.0f} q/s)  parity max|dI|={err_m:.2e}  ({dvec.shape[0]} bonds)")
+    print(f"  -> model path end-to-end (Phase 2)      : {t_model:8.3f} s  "
+          f"({t_py / t_model:.1f}x vs pyMagCalc; bond extract {t_extract:.2f}s one-time)\n")
     print(f"{'threads':>7} | {'compute(s)':>10} | {'exe wall(s)':>11} | {'q/s (compute)':>13} | {'speedup vs py':>13}")
     print("-" * 70)
     base_compute = None

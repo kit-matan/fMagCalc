@@ -8,13 +8,55 @@
 module magcalc_sqw
    use magcalc_kinds, only: dp, cp
    use magcalc_kkd,   only: kkd_matrix
+   use magcalc_model, only: build_h
    implicit none
    private
-   public :: run_sqw
+   public :: run_sqw, run_sqw_model
 
    real(kind=dp), parameter :: Q_ZERO_THRESHOLD = 1.0e-10_dp
 
 contains
+
+   !> Phase-2 S(Q,w): build H(±q) per q from the bond model, then the same
+   !> KKd + intensity kernel. No H stack crosses the boundary — only Mb.
+   subroutine run_sqw_model(n, nq, nb, s, qgrid, dvec, Mb, ud, ff, &
+                            energies, intensities, info, evout)
+      integer,          intent(in)  :: n, nq, nb
+      real(kind=dp),    intent(in)  :: s
+      real(kind=dp),    intent(in)  :: qgrid(3, nq), dvec(3, nb)
+      complex(kind=cp), intent(in)  :: Mb(2*n, 2*n, nb)
+      complex(kind=cp), intent(in)  :: ud(3*n, 3*n)
+      real(kind=dp),    intent(in)  :: ff(n, nq)
+      real(kind=dp),    intent(out) :: energies(n, nq), intensities(n, nq)
+      integer,          intent(out) :: info(nq)
+      complex(kind=cp), intent(out) :: evout(2*n, nq)
+
+      integer          :: iq, ierr
+      complex(kind=cp) :: hp(2*n, 2*n), hm(2*n, 2*n)
+      complex(kind=cp) :: k(3*n, 2*n), kd(3*n, 2*n), evals(2*n)
+
+      !$omp parallel do default(shared) private(iq, hp, hm, k, kd, evals, ierr) schedule(dynamic)
+      do iq = 1, nq
+         call build_h(n, nb, dvec, Mb,  qgrid(:, iq), hp)
+         call build_h(n, nb, dvec, Mb, -qgrid(:, iq), hm)
+         call kkd_matrix(s, n, hp, hm, ud, k, kd, evals, ierr)
+         info(iq) = ierr
+         evout(:, iq) = evals
+         if (ierr /= 0) then
+            energies(:, iq)    = ieee_nan()
+            intensities(:, iq) = ieee_nan()
+            cycle
+         end if
+         call sqw_intensity(n, qgrid(:, iq), ff(:, iq), k, kd, evals, &
+                            energies(:, iq), intensities(:, iq))
+      end do
+      !$omp end parallel do
+   contains
+      real(kind=dp) function ieee_nan() result(x)
+         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+         x = ieee_value(0.0_dp, ieee_quiet_nan)
+      end function ieee_nan
+   end subroutine run_sqw_model
 
    subroutine run_sqw(n, nq, s, qgrid, hplus, hminus, ud, ff, &
                       energies, intensities, info, Kout, Kdout, evout)

@@ -22,6 +22,7 @@ add_library(magcalc_core
   src/magcalc_kinds.f90
   src/magcalc_diag.f90
   src/magcalc_kkd.f90
+  src/magcalc_model.f90
   src/magcalc_sqw.f90
   src/magcalc_driver.f90
   src/magcalc_io.f90
@@ -62,6 +63,12 @@ if(PYTEST_EXE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dispersion_pari
     add_test(
       NAME sqw_parity
       COMMAND ${PYTEST_EXE} -q ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_sqw_parity.py
+    )
+  endif()
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_sqw_model_parity.py")
+    add_test(
+      NAME sqw_model_parity
+      COMMAND ${PYTEST_EXE} -q ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_sqw_model_parity.py
     )
   endif()
 endif()

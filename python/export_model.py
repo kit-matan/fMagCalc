@@ -86,6 +86,81 @@ def export_phase1_dispersion(args) -> dict:
     return dict(n=n, S=S, q_grid=q_grid, H_plus=h_plus, energies=energies)
 
 
+def extract_bond_model(calc):
+    """Phase-2 model export: decompose the (numeric) dynamical matrix into
+    H(q) = sum_b M_b * exp(i q.d_b), so a backend can build H(q) itself.
+
+    S and the Hamiltonian parameters are baked into the M_b (the q-loop is then
+    parameter-independent). Returns (n, S, Ud, dvec (3,nb), Mb (2n,2n,nb)).
+    """
+    import sympy as sp
+    from sympy import exp, I, Add, Mul
+
+    lam = [s for s in calc.full_symbol_list if isinstance(s, sp.Symbol)]
+    kx, ky, kz = lam[0], lam[1], lam[2]
+    subs = {lam[3]: calc.spin_magnitude}
+    for i, v in enumerate(calc.hamiltonian_params):
+        subs[lam[4 + i]] = v
+
+    n = int(calc.nspins)
+    n2 = 2 * n
+    Hn = calc.HMat_sym.subs(subs).applyfunc(
+        lambda e: sp.expand(sp.expand(e).rewrite(exp)))
+
+    bonds: dict = {}
+    for i in range(n2):
+        for j in range(n2):
+            for term in Add.make_args(sp.expand(Hn[i, j])):
+                coeff = sp.Integer(1)
+                arg = sp.Integer(0)
+                for f in Mul.make_args(term):
+                    if f.func == exp:
+                        arg += f.args[0]
+                    else:
+                        coeff *= f
+                # expand so coeff() distributes over compound args (kx & ky).
+                phase = sp.expand(arg / I)  # kx*dx + ky*dy + kz*dz
+                d = tuple(round(float(complex(phase.coeff(v)).real), 10)
+                          for v in (kx, ky, kz))
+                M = bonds.setdefault(d, np.zeros((n2, n2), complex))
+                M[i, j] += complex(coeff)
+
+    d_keys = sorted(bonds.keys())
+    nb = len(d_keys)
+    dvec = np.array(d_keys, dtype=np.float64)                 # (nb, 3)
+    Mb = np.stack([bonds[d] for d in d_keys], axis=0)         # (nb, 2n, 2n)
+    return n, float(calc.spin_magnitude), np.asarray(calc.Ud_numeric, np.complex128), dvec, Mb
+
+
+def export_bond_model(args) -> dict:
+    """Bond model + a q-grid + pyMagCalc oracle (energies, intensities), for the
+    Phase-2 model-path parity test and benchmark."""
+    from magcalc.numerical import process_calc_Sqw, _init_worker
+    from magcalc.form_factors import get_form_factor
+    import sympy as sp
+
+    calc = _make_calc(args)
+    n, S, Ud, dvec, Mb = extract_bond_model(calc)
+    ion_list = calc.sm.ion_list() if hasattr(calc.sm, "ion_list") else None
+    lam = [s for s in calc.full_symbol_list if isinstance(s, sp.Symbol)]
+    _init_worker(calc.HMat_sym, lam)
+
+    q_grid = build_q_grid(args.nq, args.seed)
+    ff = np.ones((args.nq, n))
+    energies = np.full((args.nq, n), np.nan)
+    intensities = np.full((args.nq, n), np.nan)
+    for i, q in enumerate(q_grid):
+        if ion_list:
+            qmag = float(np.linalg.norm(q))
+            ff[i] = [get_form_factor(ion_list[j], qmag) for j in range(n)]
+        _, en, inten = process_calc_Sqw((Ud, np.asarray(q, float), n, S,
+                                         list(calc.hamiltonian_params), ion_list))
+        energies[i], intensities[i] = en, inten
+
+    return dict(n=n, S=S, Ud=Ud, dvec=dvec, Mb=Mb, q_grid=q_grid, ff=ff,
+                energies=energies, intensities=intensities)
+
+
 def export_phase1_sqw(args) -> dict:
     """S(Q,w) fixture: inputs (H_plus, H_minus, Ud, ff), pyMagCalc's oracle
     outputs (energies, intensities), AND the KKdMatrix intermediates
@@ -155,7 +230,7 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--nq", type=int, default=48)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--task", choices=["disp", "sqw"], default="disp")
+    ap.add_argument("--task", choices=["disp", "sqw", "model"], default="disp")
     args = ap.parse_args()
 
     if not args.config and not args.model_dir:
@@ -164,16 +239,25 @@ def main() -> None:
     import logging
     logging.disable(logging.WARNING)
 
-    data = (export_phase1_sqw if args.task == "sqw" else export_phase1_dispersion)(args)
+    builder = {"disp": export_phase1_dispersion, "sqw": export_phase1_sqw,
+               "model": export_bond_model}[args.task]
+    data = builder(args)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     np.savez_compressed(args.out, **data)
-    extra = ""
-    if args.task == "sqw":
-        extra = f" I_range=[{np.nanmin(data['intensities']):.3f},{np.nanmax(data['intensities']):.3f}]"
-    print(f"[export_model] task={args.task} n={data['n']} S={data['S']} Nq={len(data['q_grid'])} "
-          f"H_absmax={np.abs(data['H_plus']).max():.3f} "
-          f"E_range=[{np.nanmin(data['energies']):.3f},{np.nanmax(data['energies']):.3f}]{extra} "
-          f"-> {args.out}")
+    if args.task == "model":
+        print(f"[export_model] task=model n={data['n']} S={data['S']} Nq={len(data['q_grid'])} "
+              f"n_bonds={data['dvec'].shape[0]} "
+              f"E_range=[{np.nanmin(data['energies']):.3f},{np.nanmax(data['energies']):.3f}] "
+              f"I_range=[{np.nanmin(data['intensities']):.3f},{np.nanmax(data['intensities']):.3f}] "
+              f"-> {args.out}")
+    else:
+        extra = ""
+        if args.task == "sqw":
+            extra = f" I_range=[{np.nanmin(data['intensities']):.3f},{np.nanmax(data['intensities']):.3f}]"
+        print(f"[export_model] task={args.task} n={data['n']} S={data['S']} Nq={len(data['q_grid'])} "
+              f"H_absmax={np.abs(data['H_plus']).max():.3f} "
+              f"E_range=[{np.nanmin(data['energies']):.3f},{np.nanmax(data['energies']):.3f}]{extra} "
+              f"-> {args.out}")
 
 
 # pyMagCalc path must be importable at module scope for spawn workers.

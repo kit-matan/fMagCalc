@@ -51,8 +51,10 @@ matches.
 is **18–100× faster** than pyMagCalc's multiprocessing `calculate_sqw` — the win
 is eliminating Python per-q overhead (GIL, `multiprocessing`, per-q `lambdify`),
 since both call the same LAPACK. Called **in-process via ctypes** (M4, the
-default backend — no file round-trip), the full S(Q,ω) end-to-end is **~6.6×
-faster**. See [docs/BENCHMARK.md](docs/BENCHMARK.md), [PLAN.md](PLAN.md),
+default backend — no file round-trip), the full S(Q,ω) end-to-end is **~8×
+faster**; with the **Phase-2 model path** (Fortran builds H(q) from its bond
+decomposition, so nothing per-q is built in Python) it is **~112× faster**
+end-to-end. See [docs/BENCHMARK.md](docs/BENCHMARK.md), [PLAN.md](PLAN.md),
 [docs/INTERFACE.md](docs/INTERFACE.md).
 
 ```python
