@@ -1,0 +1,30 @@
+[build-system]
+requires = ["scikit-build-core>=0.9"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "fmagcalc"
+version = "0.1.0"
+description = "Fortran LSWT backend for pyMagCalc (OpenMP + LAPACK dispersion and S(Q,w) kernels)"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Kittiwit Matan", email = "kittiwit@gmail.com" }]
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22"]
+
+[project.urls]
+Homepage = "https://github.com/kit-matan/fMagCalc"
+
+[tool.scikit-build]
+# Pure-Python sources live in python/fmagcalc; the compiled shared library is
+# added to the same package directory by the CMake install rule (SKBUILD).
+wheel.packages = ["python/fmagcalc"]
+cmake.version = ">=3.20"
+# The wheel contains a platform-specific shared library but no Python ABI
+# extension module, so tag it py3-none-<platform>.
+wheel.py-api = "py3"
+
+[tool.scikit-build.cmake.define]
+# Wheels must not be tied to the build host's CPU; -march=native stays the
+# default for plain CMake builds (see CMakeLists.txt).
+FMAGCALC_PORTABLE = "ON"

@@ -10,7 +10,15 @@ endif()
 # library used by the in-process (ctypes) path.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -march=native")
+# FMAGCALC_PORTABLE=ON drops -march=native so the binary runs on any CPU of
+# the target architecture (pip wheels set this via pyproject.toml); plain
+# CMake builds keep the tuned default.
+option(FMAGCALC_PORTABLE "Build without -march=native for redistributable binaries" OFF)
+if(FMAGCALC_PORTABLE)
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
+else()
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -march=native")
+endif()
 set(CMAKE_Fortran_FLAGS_DEBUG   "-O0 -g -fcheck=all -fbacktrace -Wall")
 
 # --- Dependencies -----------------------------------------------------------
@@ -43,6 +51,13 @@ target_link_libraries(fmagcalc_sqw PRIVATE magcalc_core)
 add_library(fmagcalc_shared SHARED src/magcalc_capi.f90)
 target_link_libraries(fmagcalc_shared PRIVATE magcalc_core)
 set_target_properties(fmagcalc_shared PROPERTIES OUTPUT_NAME fmagcalc)
+
+# When built by pip / scikit-build-core (SKBUILD is set), install the shared
+# library into the fmagcalc package directory inside the wheel so _capi.py can
+# load it package-relatively. Plain CMake builds install nothing.
+if(SKBUILD)
+  install(TARGETS fmagcalc_shared LIBRARY DESTINATION fmagcalc)
+endif()
 
 # --- Tests ------------------------------------------------------------------
 enable_testing()

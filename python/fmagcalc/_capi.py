@@ -23,9 +23,18 @@ _LIBNAMES = {
 
 
 def _lib_path() -> str:
-    here = os.path.dirname(os.path.abspath(__file__))
-    build = os.path.join(os.path.dirname(os.path.dirname(here)), "build")
+    """Locate libfmagcalc. Search order: (1) FMAGCALC_LIB env var, (2) inside
+    this package (where a pip/scikit-build-core install puts it), (3) the
+    source-tree ../../build directory (dev CMake builds)."""
     name = _LIBNAMES.get(sys.platform, "libfmagcalc.so")
+    env = os.environ.get("FMAGCALC_LIB")
+    if env:
+        return env
+    here = os.path.dirname(os.path.abspath(__file__))
+    packaged = os.path.join(here, name)
+    if os.path.exists(packaged):
+        return packaged
+    build = os.path.join(os.path.dirname(os.path.dirname(here)), "build")
     return os.path.join(build, name)
 
 

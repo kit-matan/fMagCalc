@@ -88,7 +88,24 @@ fMagCalc/
 └── CMakeLists.txt
 ```
 
-## Build (once sources exist)
+## Install (pip — recommended)
+
+The repository is a pip-installable package: [scikit-build-core](https://scikit-build.readthedocs.io/)
+drives the CMake build during `pip install` and ships `libfmagcalc` inside the
+`fmagcalc` package, so no source-tree layout or `FMAGCALC_PATH` is needed at
+runtime. Requires a Fortran compiler, CMake ≥ 3.20, and LAPACK (macOS:
+Accelerate; Linux: OpenBLAS/MKL).
+
+```bash
+pip install /path/to/fMagCalc      # or `pip install .` from the repo root
+python -c "import fmagcalc; print(fmagcalc.backend)"   # -> ctypes
+```
+
+pyMagCalc then picks it up automatically with `backend="fortran"` (a plain
+`import fmagcalc` succeeds; no sibling checkout required). Pip builds use
+portable flags (`FMAGCALC_PORTABLE=ON`, no `-march=native`).
+
+## Build (development, CMake directly)
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -96,9 +113,10 @@ cmake --build build -j
 ctest --test-dir build
 ```
 
-Toolchain on the dev machine: gfortran 15 (Homebrew GCC), CMake ≥ 3.31, LAPACK
-via macOS Accelerate (or OpenBLAS). f2py is available for the Python extension
-path.
+The wrapper in `python/fmagcalc` finds the library in `build/` when it is not
+pip-installed (dev fallback; `FMAGCALC_LIB` overrides the search). Toolchain on
+the dev machine: gfortran 15 (Homebrew GCC), CMake ≥ 3.31, LAPACK via macOS
+Accelerate (or OpenBLAS). f2py is available for the Python extension path.
 
 ## License
 
