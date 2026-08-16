@@ -16,7 +16,8 @@ import pytest
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 PYMAGCALC = os.path.abspath(os.path.join(REPO, "..", "pyMagCalc"))
-KFE3J = os.path.join(PYMAGCALC, "examples", "KFe3J")
+# examples/ was reorganized (pyMagCalc 4dadddc): KFe3J now lives under examples/materials/.
+KFE3J = os.path.join(PYMAGCALC, "examples", "materials", "KFe3J")
 
 sys.path.insert(0, os.path.join(REPO, "python"))
 sys.path.insert(0, PYMAGCALC)
