@@ -192,6 +192,14 @@ Watch the subtle parts when porting `linalg.py`:
   unchanged; all 31 pyMagCalc tests still pass. Verified by
   `tests/test_pymagcalc_integration.py` here (pyMagCalc-fortran == pyMagCalc-numpy
   oracle). The only change to pyMagCalc is additive edits to `magcalc/core.py`.
+- **K6 — per-site spins** ✅ (2026-10-27; the optional K6 of the workspace's
+  `RUST_KERNELS_PLAN.md`, done here instead of as a second compiled backend).
+  `kkd_matrix` scales site i's rows of K/Kd by `sqrt(S_i/2)`; `run_sqw`,
+  `run_sqw_model`, `powder_average` and the C API take the per-site vector
+  (`spins=`, default N copies of S), so pyMagCalc's mixed-spin S(Q,ω) and powder run
+  here instead of falling back to NumPy. Uniform models bit-identical to before on
+  both the native and the portable build; mixed-spin parity with pyMagCalc to 1e-10
+  (`tests/test_sqw_per_site_spins.py`).
 
 ---
 

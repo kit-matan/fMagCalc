@@ -27,10 +27,10 @@ contains
 
    !> Phase-2 S(Q,w): build H(±q) per q from the bond model, then the same
    !> KKd + intensity kernel. No H stack crosses the boundary — only Mb.
-   subroutine run_sqw_model(n, nq, nb, s, qgrid, dvec, Mb, ud, ff, &
+   subroutine run_sqw_model(n, nq, nb, spins, qgrid, dvec, Mb, ud, ff, &
                             energies, intensities, info, evout)
       integer,          intent(in)  :: n, nq, nb
-      real(kind=dp),    intent(in)  :: s
+      real(kind=dp),    intent(in)  :: spins(n)   !< per-site S_i (prefactor only)
       real(kind=dp),    intent(in)  :: qgrid(3, nq), dvec(3, nb)
       complex(kind=cp), intent(in)  :: Mb(2*n, 2*n, nb)
       complex(kind=cp), intent(in)  :: ud(3*n, 3*n)
@@ -47,7 +47,7 @@ contains
       do iq = 1, nq
          call build_h(n, nb, dvec, Mb,  qgrid(:, iq), hp)
          call build_h(n, nb, dvec, Mb, -qgrid(:, iq), hm)
-         call kkd_matrix(s, n, hp, hm, ud, k, kd, evals, ierr)
+         call kkd_matrix(spins, n, hp, hm, ud, k, kd, evals, ierr)
          info(iq) = ierr
          evout(:, iq) = evals
          if (ierr /= 0) then
@@ -66,10 +66,10 @@ contains
       end function ieee_nan
    end subroutine run_sqw_model
 
-   subroutine run_sqw(n, nq, s, qgrid, hplus, hminus, ud, ff, &
+   subroutine run_sqw(n, nq, spins, qgrid, hplus, hminus, ud, ff, &
                       energies, intensities, info, Kout, Kdout, evout)
       integer,          intent(in)  :: n, nq
-      real(kind=dp),    intent(in)  :: s
+      real(kind=dp),    intent(in)  :: spins(n)   !< per-site S_i
       real(kind=dp),    intent(in)  :: qgrid(3, nq)
       complex(kind=cp), intent(in)  :: hplus(2*n, 2*n, nq)
       complex(kind=cp), intent(in)  :: hminus(2*n, 2*n, nq)
@@ -87,7 +87,7 @@ contains
 
       !$omp parallel do default(shared) private(iq, k, kd, evals, ierr) schedule(dynamic)
       do iq = 1, nq
-         call kkd_matrix(s, n, hplus(:, :, iq), hminus(:, :, iq), ud, k, kd, evals, ierr)
+         call kkd_matrix(spins, n, hplus(:, :, iq), hminus(:, :, iq), ud, k, kd, evals, ierr)
          info(iq) = ierr
          Kout(:, :, iq)  = k
          Kdout(:, :, iq) = kd

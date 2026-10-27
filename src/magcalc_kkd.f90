@@ -6,7 +6,14 @@
 !>   apply_gs        <- _apply_gram_schmidt    (degenerate-block QR)
 !>   calc_alpha      <- _calculate_alpha_matrix (G-metric pseudo-norm)
 !>   match_reorder   <- _match_and_reorder_minus_q (projection match + phase)
-!>   K/Kd build      <- _calculate_K_Kd        (sqrt(S/2) * Ud * Udd * inv_T)
+!>   K/Kd build      <- KKdMatrix step 9       (sqrt(S_i/2) * Ud * Udd * inv_T)
+!>
+!> The prefactor is sqrt(S_i/2) PER SITE (row block 3i-2..3i), as in
+!> linalg._spin_prefactor_vector: a mixed-spin model needs each site's own S, and
+!> a single global sqrt(S/2) made every relative intensity wrong by sqrt(S_i/S_ref).
+!> A per-site row scale is exact because Ud is block-diagonal in the sites. With
+!> every S_i equal it is the old scalar product element for element, so a uniform
+!> model is bit-identical to the scalar kernel.
 module magcalc_kkd
    use magcalc_kinds, only: dp, cp
    use magcalc_diag,  only: eig_zgeev, argsort_complex, argsort_abs, qr_orthonormal
@@ -22,9 +29,9 @@ module magcalc_kkd
 
 contains
 
-   subroutine kkd_matrix(s, n, hplus, hminus, ud, k, kd, evals, info)
-      real(kind=dp),    intent(in)  :: s
+   subroutine kkd_matrix(spins, n, hplus, hminus, ud, k, kd, evals, info)
       integer,          intent(in)  :: n
+      real(kind=dp),    intent(in)  :: spins(n)   !< per-site S_i
       complex(kind=cp), intent(in)  :: hplus(2*n, 2*n)
       complex(kind=cp), intent(in)  :: hminus(2*n, 2*n)
       complex(kind=cp), intent(in)  :: ud(3*n, 3*n)
@@ -34,7 +41,7 @@ contains
       integer,          intent(out) :: info
 
       integer          :: n2, n3, i, j
-      real(kind=dp)    :: gdiag(2*n), pref
+      real(kind=dp)    :: gdiag(2*n), pref(3*n)
       complex(kind=cp) :: evp(2*n), evm(2*n)
       complex(kind=cp) :: Vp(2*n, 2*n), Vm(2*n, 2*n)
       complex(kind=cp) :: alphap(2*n), alpham(2*n)
@@ -80,9 +87,15 @@ contains
          Udd(3*(i-1)+2, i)     = -II    ! 1/I = -i
          Udd(3*(i-1)+2, i + n) =  II    ! -1/I = +i
       end do
-      pref = sqrt(s / 2.0_dp)
-      k  = pref * matmul(ud, matmul(Udd, invTp))
-      kd = pref * matmul(ud, matmul(Udd, invTm))
+      do i = 1, n
+         pref(3*(i-1)+1:3*i) = sqrt(spins(i) / 2.0_dp)
+      end do
+      k  = matmul(ud, matmul(Udd, invTp))
+      kd = matmul(ud, matmul(Udd, invTm))
+      do j = 1, n2
+         k(:, j)  = pref * k(:, j)
+         kd(:, j) = pref * kd(:, j)
+      end do
       where (abs(k)  < ZERO_MATRIX_ELEMENT_THRESHOLD) k  = (0.0_dp, 0.0_dp)
       where (abs(kd) < ZERO_MATRIX_ELEMENT_THRESHOLD) kd = (0.0_dp, 0.0_dp)
 

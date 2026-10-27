@@ -13,6 +13,7 @@ program main_sqw
    character(len=4096) :: in_path, out_path
    integer                       :: n, nq
    real(real64)                  :: s
+   real(kind=dp),    allocatable :: spins(:)
    complex(kind=cp), allocatable :: ud(:, :), hplus(:, :, :), hminus(:, :, :)
    real(kind=dp),    allocatable :: qgrid(:, :), ff(:, :)
    real(kind=dp),    allocatable :: energies(:, :), intensities(:, :)
@@ -29,11 +30,14 @@ program main_sqw
    call get_command_argument(2, out_path)
 
    call read_sqw_input(trim(in_path), n, nq, s, ud, hplus, hminus, qgrid, ff)
+   ! The file format carries one S (docs/INTERFACE.md); mixed spin goes through
+   ! the ctypes path, which takes the per-site vector.
+   allocate(spins(n)); spins = s
    allocate(energies(n, nq), intensities(n, nq), info(nq))
    allocate(Kout(3*n, 2*n, nq), Kdout(3*n, 2*n, nq), evout(2*n, nq))
 
    call system_clock(c0, crate)
-   call run_sqw(n, nq, s, qgrid, hplus, hminus, ud, ff, &
+   call run_sqw(n, nq, spins, qgrid, hplus, hminus, ud, ff, &
                 energies, intensities, info, Kout, Kdout, evout)
    call system_clock(c1)
    compute_seconds = real(c1 - c0, real64) / real(crate, real64)

@@ -28,11 +28,13 @@ contains
       info = int(iinfo, c_int)
    end subroutine magcalc_disp_c
 
-   subroutine magcalc_sqw_c(n, nq, s, qgrid, hplus, hminus, ud, ff, &
+   !> spins(n) is the per-site S_i of the sqrt(S_i/2) prefactor (a uniform model
+   !> passes n copies of S). It replaced the scalar `s` argument in K6 (2026-10-27).
+   subroutine magcalc_sqw_c(n, nq, spins, qgrid, hplus, hminus, ud, ff, &
                             energies, intensities, info, evals) &
          bind(C, name="magcalc_sqw_c")
       integer(c_int),   value       :: n, nq
-      real(c_double),   value       :: s
+      real(c_double),   intent(in)  :: spins(n)
       real(kind=dp),    intent(in)  :: qgrid(3, nq), ff(n, nq)
       complex(kind=cp), intent(in)  :: hplus(2*n, 2*n, nq), hminus(2*n, 2*n, nq)
       complex(kind=cp), intent(in)  :: ud(3*n, 3*n)
@@ -46,7 +48,7 @@ contains
       ! K/Kd are needed by the kernel but are gauge-dependent and not returned
       ! to Python; allocate scratch and discard.
       allocate(K(3*n, 2*n, nq), Kd(3*n, 2*n, nq))
-      call run_sqw(n, nq, real(s, dp), qgrid, hplus, hminus, ud, ff, &
+      call run_sqw(n, nq, real(spins, dp), qgrid, hplus, hminus, ud, ff, &
                    energies, intensities, iinfo, K, Kd, evals)
       info = int(iinfo, c_int)
       deallocate(K, Kd)
@@ -54,18 +56,18 @@ contains
 
    !> Phase-2: build H(q) from the bond model inside the Fortran loop. Only Mb
    !> (2N,2N,nb) crosses the boundary, not a per-q H stack.
-   subroutine magcalc_sqw_model_c(n, nq, nb, s, qgrid, dvec, Mb, ud, ff, &
+   subroutine magcalc_sqw_model_c(n, nq, nb, spins, qgrid, dvec, Mb, ud, ff, &
                                   energies, intensities, info, evals) &
          bind(C, name="magcalc_sqw_model_c")
       integer(c_int),   value       :: n, nq, nb
-      real(c_double),   value       :: s
+      real(c_double),   intent(in)  :: spins(n)
       real(kind=dp),    intent(in)  :: qgrid(3, nq), dvec(3, nb), ff(n, nq)
       complex(kind=cp), intent(in)  :: Mb(2*n, 2*n, nb), ud(3*n, 3*n)
       real(kind=dp),    intent(out) :: energies(n, nq), intensities(n, nq)
       integer(c_int),   intent(out) :: info(nq)
       complex(kind=cp), intent(out) :: evals(2*n, nq)
       integer :: iinfo(nq)
-      call run_sqw_model(n, nq, nb, real(s, dp), qgrid, dvec, Mb, ud, ff, &
+      call run_sqw_model(n, nq, nb, real(spins, dp), qgrid, dvec, Mb, ud, ff, &
                          energies, intensities, iinfo, evals)
       info = int(iinfo, c_int)
    end subroutine magcalc_sqw_model_c

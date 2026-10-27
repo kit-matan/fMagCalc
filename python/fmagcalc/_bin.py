@@ -74,7 +74,7 @@ def run_dispersion(h_plus: np.ndarray, exe: str | None = None) -> tuple[np.ndarr
     return energies, info
 
 
-def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, exe: str | None = None):
+def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, exe: str | None = None, spins=None):
     """Run the Fortran S(Q,w) driver on a q-grid.
 
     Args mirror docs/INTERFACE.md (all NumPy, q-first stacking):
@@ -83,10 +83,17 @@ def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, exe: str | None = None):
         ff              : float   (Nq, N)
         S               : float
         q_grid          : float   (Nq, 3)
+        spins           : optional (N,) per-site S_i. The file format carries ONE S,
+                          so this transport refuses a mixed-spin vector; the ctypes
+                          path (fmagcalc._capi) takes it.
 
     Returns dict with energies (Nq,N), intensities (Nq,N), info (Nq,) and the
     intermediates K, Kd (Nq, 3N, 2N) and eigvals (Nq, 2N).
     """
+    if spins is not None and np.any(np.asarray(spins, dtype=float) != float(S)):
+        raise NotImplementedError(
+            "mixed-spin S(Q,w) needs the ctypes path; the subprocess transport's "
+            "file format carries a single S")
     exe = exe or os.path.join(_build_dir(), "fmagcalc_sqw")
     if not os.path.exists(exe):
         raise FileNotFoundError(f"fmagcalc_sqw not built: {exe}")

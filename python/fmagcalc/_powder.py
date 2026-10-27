@@ -44,7 +44,8 @@ def _average_segments(per_point, segment_sizes, n):
     return np.asarray(out)
 
 
-def powder_average(dvec, Mb, ud, S, q_magnitudes, num_samples=100, ff_func=None):
+def powder_average(dvec, Mb, ud, S, q_magnitudes, num_samples=100, ff_func=None,
+                   spins=None):
     """Powder-averaged S(|q|, w) via the Fortran model path.
 
     Args:
@@ -52,6 +53,7 @@ def powder_average(dvec, Mb, ud, S, q_magnitudes, num_samples=100, ff_func=None)
         q_magnitudes    : 1D array of |q| values.
         num_samples     : sphere samples per |q|.
         ff_func         : optional callable |q| -> (N,) form factors. Default: 1.
+        spins           : optional (N,) per-site S_i (mixed spin); see run_sqw.
 
     Returns dict: q_magnitudes, energies (Nmag, N), intensities (Nmag, N).
     """
@@ -66,7 +68,7 @@ def powder_average(dvec, Mb, ud, S, q_magnitudes, num_samples=100, ff_func=None)
     else:
         ff = np.array([ff_func(float(np.linalg.norm(q))) for q in all_q], dtype=np.float64)
 
-    r = run_sqw_model(dvec, Mb, ud, ff, S, all_q)
+    r = run_sqw_model(dvec, Mb, ud, ff, S, all_q, spins=spins)
     return dict(
         q_magnitudes=q_mags,
         energies=_average_segments(r["energies"], segs, n),

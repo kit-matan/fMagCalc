@@ -15,6 +15,7 @@ q-points. The bosonic Hamiltonian is `2N × 2N`; the rotation matrix is
 | Name      | Type/shape                 | Meaning |
 |-----------|----------------------------|---------|
 | `S`       | real scalar                | spin magnitude |
+| `spins`   | real `(N)`, optional       | per-site S_i of the `sqrt(S_i/2)` intensity prefactor (mixed spin); default N copies of `S`. ctypes path only — the binary file below carries one `S` |
 | `N`       | int scalar                 | nspins |
 | `q_grid`  | real `(Nq, 3)`             | q-vectors (the path or grid) |
 | `H_plus`  | complex `(Nq, 2N, 2N)`     | dynamical matrix at +q (= 2gH) |
@@ -79,4 +80,8 @@ artifact and matches what pyMagCalc's exact-H path returns in practice (0).
 
 The metric is `G = diag(1,…,1, −1,…,−1)` (N positive, N negative). The boson map
 `Udd` uses `1/I = -i`: rows `3i → (i:+1, i+N:+1)`, rows `3i+1 → (i:-i, i+N:+i)`.
-Prefactor for K/Kd is `sqrt(S/2)`.
+Prefactor for K/Kd is `sqrt(S_i/2)` **per site** (rows `3i..3i+2` of site i), as in
+pyMagCalc's `linalg._spin_prefactor_vector`; with every S_i = S it is the old
+`sqrt(S/2)` element for element, so a uniform model is bit-identical to the scalar
+kernel. In the C API (`magcalc_sqw_c`, `magcalc_sqw_model_c`) the third argument is a
+pointer to those N doubles; it was the scalar `S` by value before 2026-10-27 (K6).

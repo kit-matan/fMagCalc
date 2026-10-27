@@ -52,10 +52,12 @@ def _lib():
         ci = ctypes.c_int
         lib.magcalc_disp_c.argtypes = [ci, ci, cvp, cvp, cvp]
         lib.magcalc_disp_c.restype = None
-        lib.magcalc_sqw_c.argtypes = [ci, ci, ctypes.c_double,
+        # The third argument is the per-site spin vector (a pointer); it was a
+        # scalar S by value before K6 (2026-10-27).
+        lib.magcalc_sqw_c.argtypes = [ci, ci, cvp,
                                       cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp]
         lib.magcalc_sqw_c.restype = None
-        lib.magcalc_sqw_model_c.argtypes = [ci, ci, ci, ctypes.c_double,
+        lib.magcalc_sqw_model_c.argtypes = [ci, ci, ci, cvp,
                                             cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp, cvp]
         lib.magcalc_sqw_model_c.restype = None
         _LIB = lib
@@ -64,6 +66,20 @@ def _lib():
 
 def _ptr(a):
     return a.ctypes.data_as(ctypes.c_void_p)
+
+
+def spin_vector(S, spins, n):
+    """Per-site S_i for the sqrt(S_i/2) S(Q,w) prefactor: `spins` if given (length
+    n), else n copies of the scalar S -- which reproduces the old global-S kernel
+    bit for bit."""
+    if spins is None:
+        return np.full(n, float(S), dtype=np.float64)
+    v = np.ascontiguousarray(spins, dtype=np.float64).reshape(-1)
+    if v.shape[0] != n:
+        raise ValueError(f"spins has {v.shape[0]} entries for {n} sites")
+    if not np.all(v > 0):
+        raise ValueError("every per-site spin must be positive")
+    return v
 
 
 def run_dispersion(h_plus, **_):
@@ -79,10 +95,14 @@ def run_dispersion(h_plus, **_):
     return energies.T.copy(), info.copy()
 
 
-def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, **_):
+def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, spins=None, **_):
     """In-process S(Q,w). Returns dict with energies, intensities (Nq, N),
     info (Nq,), eigvals (Nq, 2N). (K/Kd are gauge-dependent and not returned by
-    this path; use _bin.run_sqw for them.)"""
+    this path; use _bin.run_sqw for them.)
+
+    spins: optional (N,) per-site S_i for a MIXED-SPIN model; the intensity
+    prefactor is then sqrt(S_i/2) per site. Default: N copies of S.
+    """
     hp = np.asfortranarray(np.moveaxis(np.ascontiguousarray(h_plus, np.complex128), 0, -1))
     hm = np.asfortranarray(np.moveaxis(np.ascontiguousarray(h_minus, np.complex128), 0, -1))
     nq = hp.shape[2]
@@ -95,15 +115,16 @@ def run_sqw(h_plus, h_minus, ud, ff, S, q_grid, **_):
     intensities = np.empty((n, nq), np.float64, order="F")
     info = np.empty(nq, np.intc)
     evals = np.empty((2 * n, nq), np.complex128, order="F")
+    sv = spin_vector(S, spins, n)
 
-    _lib().magcalc_sqw_c(n, nq, float(S), _ptr(qf), _ptr(hp), _ptr(hm), _ptr(udf),
+    _lib().magcalc_sqw_c(n, nq, _ptr(sv), _ptr(qf), _ptr(hp), _ptr(hm), _ptr(udf),
                          _ptr(fff), _ptr(energies), _ptr(intensities), _ptr(info), _ptr(evals))
 
     return dict(energies=energies.T.copy(), intensities=intensities.T.copy(),
                 info=info.copy(), eigvals=evals.T.copy())
 
 
-def run_sqw_model(dvec, Mb, ud, ff, S, q_grid, **_):
+def run_sqw_model(dvec, Mb, ud, ff, S, q_grid, spins=None, **_):
     """Phase-2 in-process S(Q,w): Fortran builds H(q) from the bond model, so
     no per-q Hamiltonian stack is marshalled — only Mb (built once).
 
@@ -111,6 +132,8 @@ def run_sqw_model(dvec, Mb, ud, ff, S, q_grid, **_):
         dvec : (nb, 3) float — bond vectors d_b.
         Mb   : (nb, 2N, 2N) complex — coefficient matrices (S/params baked in).
         ud   : (3N, 3N) complex.  ff: (Nq, N) float.  q_grid: (Nq, 3) float.
+        spins: optional (N,) per-site S_i for the sqrt(S_i/2) prefactor of a
+               mixed-spin model (S itself is already baked into Mb).
     Returns dict: energies, intensities (Nq, N), info (Nq,), eigvals (Nq, 2N).
     """
     Mbf = np.asfortranarray(np.moveaxis(np.ascontiguousarray(Mb, np.complex128), 0, -1))  # (2N,2N,nb)
@@ -126,8 +149,9 @@ def run_sqw_model(dvec, Mb, ud, ff, S, q_grid, **_):
     intensities = np.empty((n, nq), np.float64, order="F")
     info = np.empty(nq, np.intc)
     evals = np.empty((2 * n, nq), np.complex128, order="F")
+    sv = spin_vector(S, spins, n)
 
-    _lib().magcalc_sqw_model_c(n, nq, nb, float(S), _ptr(qf), _ptr(dvf), _ptr(Mbf),
+    _lib().magcalc_sqw_model_c(n, nq, nb, _ptr(sv), _ptr(qf), _ptr(dvf), _ptr(Mbf),
                                _ptr(udf), _ptr(fff), _ptr(energies), _ptr(intensities),
                                _ptr(info), _ptr(evals))
     return dict(energies=energies.T.copy(), intensities=intensities.T.copy(),

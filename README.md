@@ -63,7 +63,14 @@ end-to-end. See [docs/BENCHMARK.md](docs/BENCHMARK.md), [PLAN.md](PLAN.md),
 import fmagcalc                       # backend == "ctypes" when libfmagcalc is built
 r = fmagcalc.run_sqw(h_plus, h_minus, ud, ff, S, q_grid)
 r["energies"], r["intensities"]       # (Nq, N) each
+# mixed spin: per-site S_i for the sqrt(S_i/2) intensity prefactor
+r = fmagcalc.run_sqw(h_plus, h_minus, ud, ff, S, q_grid, spins=[0.5, 2.0])
 ```
+
+Mixed-spin models (sites with different `spin_S`) are supported since 2026-10-27:
+the prefactor is √(S_i/2) per site, so pyMagCalc no longer falls back to NumPy for
+them under `backend: fortran`. Non-mixed results are bit-identical to before
+(`tests/test_sqw_per_site_spins.py`).
 
 Try it:
 ```bash
