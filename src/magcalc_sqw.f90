@@ -18,10 +18,22 @@ module magcalc_sqw
    ! their eigenvectors span the null space of the para-unitary metric, so the
    ! Bogoliubov normalization (alpha = sqrt(G_ii/N_ii)) is ill-conditioned and
    ! the resulting intensity depends on the arbitrary degenerate eigenbasis — a
-   ! machine-epsilon change in H(q) (e.g. the model-path reconstruction) flips
-   ! it from 0 to a spurious finite value, producing vertical streaks in S(Q,w).
-   ! Suppress these modes; |E| below this (meV) is treated as zero.
-   real(kind=dp), parameter :: ENERGY_ZERO_THRESHOLD = 1.0e-3_dp
+   ! machine-epsilon change in H(q) flips it from 0 to a spurious finite value.
+   !
+   ! On the EXACT-H path (`run_sqw`, the one pyMagCalc calls) no energy cut is
+   ! applied: kkd_matrix's pseudo-norm rule (alpha = 0 when |N_ii| < 1e-12, the
+   ! same rule and constant as pyMagCalc's NumPy KKdMatrix) already zeroes a
+   ! genuinely zero mode, and an energy cut also drops well-conditioned modes.
+   ! Measured on the ferromagnetic chain, whose intensity is (S/2)(1 + Qz^2)
+   ! exactly at every q: a 1e-3 meV cut zeroed it at 4e-11 ... 9.9e-4 meV, while
+   ! the pseudo-norm rule alone reproduces the closed form there and gives 0 only
+   ! at the exact zero, as NumPy does (tests/test_degenerate_and_gapless.py).
+   !
+   ! The BOND-MODEL path (`run_sqw_model`) rebuilds H(q) from the bond list, and
+   ! that reconstruction differs from the exact H by ~1e-14 -- enough to light up
+   ! the zero modes (the Gamma streak of tests/test_streak_regression.py). It keeps
+   ! an absolute cut: |E| below this (meV) is treated as zero there only.
+   real(kind=dp), parameter :: MODEL_ENERGY_ZERO_THRESHOLD = 1.0e-3_dp
 
 contains
 
@@ -56,7 +68,7 @@ contains
             cycle
          end if
          call sqw_intensity(n, qgrid(:, iq), ff(:, iq), k, kd, evals, &
-                            energies(:, iq), intensities(:, iq))
+                            MODEL_ENERGY_ZERO_THRESHOLD, energies(:, iq), intensities(:, iq))
       end do
       !$omp end parallel do
    contains
@@ -98,7 +110,7 @@ contains
             cycle
          end if
          call sqw_intensity(n, qgrid(:, iq), ff(:, iq), k, kd, evals, &
-                            energies(:, iq), intensities(:, iq))
+                            0.0_dp, energies(:, iq), intensities(:, iq))
       end do
       !$omp end parallel do
    contains
@@ -108,9 +120,10 @@ contains
       end function ieee_nan
    end subroutine run_sqw
 
-   subroutine sqw_intensity(n, qvec, ff, k, kd, evals, energies, intensities)
+   !> `e_zero`: modes with |E| < e_zero get zero intensity (0 = no energy cut).
+   subroutine sqw_intensity(n, qvec, ff, k, kd, evals, e_zero, energies, intensities)
       integer,          intent(in)  :: n
-      real(kind=dp),    intent(in)  :: qvec(3), ff(n)
+      real(kind=dp),    intent(in)  :: qvec(3), ff(n), e_zero
       complex(kind=cp), intent(in)  :: k(3*n, 2*n), kd(3*n, 2*n), evals(2*n)
       real(kind=dp),    intent(out) :: energies(n), intensities(n)
 
@@ -154,8 +167,8 @@ contains
          end do
          intensities(mode) = real(acc, dp)
          if (intensities(mode) < 0.0_dp) intensities(mode) = 0.0_dp
-         ! Suppress ill-conditioned zero-energy (Goldstone) modes.
-         if (abs(energies(mode)) < ENERGY_ZERO_THRESHOLD) intensities(mode) = 0.0_dp
+         ! Suppress ill-conditioned zero-energy modes (bond-model path only).
+         if (abs(energies(mode)) < e_zero) intensities(mode) = 0.0_dp
       end do
    end subroutine sqw_intensity
 

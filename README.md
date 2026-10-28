@@ -49,6 +49,16 @@ The full Bogoliubov `KKdMatrix` pipeline (two-stage sort, degenerate-block QR,
 and **powder averaging** (`fmagcalc.powder_average`, M6) reproduces pyMagCalc to
 ~1e-11.
 
+**Degenerate and gapless models (2026-10-28).** The +q/−q matching now projects onto a
+degenerate −q subspace, as pyMagCalc's has since July. The single-column match it
+replaced left degenerate magnons unmatched and without intensity: on a collinear
+antiferromagnet, 172 of 1495 powder points came out exactly 0. The exact-H path
+(`run_sqw`) also no longer zeroes modes below 1e-3 meV, a cut that dropped
+well-conditioned modes. It stays on `run_sqw_model`, where bond-reconstruction noise
+needs it (`docs/INTERFACE.md`). Pinned in `tests/test_degenerate_and_gapless.py`;
+pyMagCalc pins both backends to Sunny 0.8.1 and to the ferromagnetic chain's closed
+form. Builds older than this should be reinstalled.
+
 **Speed (KFe3J / 8000 q-points, parity preserved):** the OpenMP compute kernel
 is **18–100× faster** than pyMagCalc's multiprocessing `calculate_sqw` — the win
 is eliminating Python per-q overhead (GIL, `multiprocessing`, per-q `lambdify`),

@@ -204,84 +204,109 @@ contains
    !> _match_and_reorder_minus_q: align -q modes to the +q basis by maximum
    !> projection, carry a phase factor onto the reordered -q alpha.
    subroutine match_reorder(n, Vp, alphap, Vm, evm, alpham, Vm_re, evm_re, alpham_re)
+      ! pyMagCalc `linalg._match_and_reorder_minus_q`, line for line (its
+      ! degenerate-subspace form, pyMagCalc 5449196). For a non-degenerate band
+      ! the swapped-conjugated -q eigenvector is parallel (up to phase) to its +q
+      ! partner and this is the best-|overlap| match. Inside a DEGENERATE
+      ! eigenspace the two independent diagonalizations mix the subspace by an
+      ! arbitrary unitary, so no single -q column need match: the +q target is
+      ! PROJECTED onto the degenerate -q subspace (orthogonalized against the
+      ! partners already built from it), an equally valid -q eigenbasis aligned
+      ! with +q by construction. The single-column match this replaced left such
+      ! modes unmatched, i.e. with alpha(-q) = 0 and no intensity: on a collinear
+      ! AFM chain, 172 of 1495 powder points came out exactly 0 where Sunny and
+      ! NumPy agree to 1e-8 (tests/test_degenerate_and_gapless.py).
       integer,          intent(in)  :: n
       complex(kind=cp), intent(in)  :: Vp(2*n, 2*n), alphap(2*n)
       complex(kind=cp), intent(in)  :: Vm(2*n, 2*n), evm(2*n), alpham(2*n)
       complex(kind=cp), intent(out) :: Vm_re(2*n, 2*n), evm_re(2*n), alpham_re(2*n)
 
-      integer          :: n2, ip, jm, best_j, ridx
-      real(kind=dp)    :: nt2, ns2, proj, thr, tol, tol2
-      complex(kind=cp) :: swapc(2*n, 2*n), target(2*n), source(2*n)
-      complex(kind=cp) :: phase
-      logical          :: matched(2*n)
+      integer          :: n2
+      complex(kind=cp) :: swapc(2*n, 2*n)
 
       n2 = 2 * n
-      tol = EIGENVECTOR_MATCHING_THRESHOLD
-      tol2 = tol * tol
       Vm_re = (0.0_dp, 0.0_dp); evm_re = (0.0_dp, 0.0_dp); alpham_re = (0.0_dp, 0.0_dp)
-      matched = .false.
 
       ! Vm_orig_swap_conj = conj( vstack( Vm[n:2n,:], Vm[0:n,:] ) )
       swapc(1:n, :)      = conjg(Vm(n+1:n2, :))
       swapc(n+1:n2, :)   = conjg(Vm(1:n, :))
 
-      ! Loop 1: +q cols 1..n matched against swapc cols n+1..2n
-      do ip = 1, n
-         target = Vp(:, ip)
-         nt2 = real(sum(conjg(target) * target), dp)
-         if (nt2 < tol2) cycle
-         best_j = 0; proj = -1.0_dp
-         do jm = n + 1, n2
-            if (matched(jm)) cycle
-            source = swapc(:, jm)
-            ns2 = real(sum(conjg(source) * source), dp)
-            if (ns2 < tol2) cycle
-            thr = sqrt(nt2 * ns2) - tol
-            if (abs(sum(conjg(target) * source)) > thr) then
-               if (abs(sum(conjg(target) * source)) > proj) then
-                  proj = abs(sum(conjg(target) * source)); best_j = jm
-               end if
-            end if
-         end do
-         if (best_j > 0) then
-            ridx = ip + n
-            Vm_re(:, ridx) = Vm(:, best_j)
-            evm_re(ridx)   = evm(best_j)
-            call phase_factor(n2, target, swapc(:, best_j), tol, phase)
-            alpham_re(ridx) = conjg(alphap(ip) * phase)
-            matched(best_j) = .true.
-         end if
-      end do
-
-      ! Loop 2: +q cols n+1..2n matched against swapc cols 1..n
-      do ip = n + 1, n2
-         target = Vp(:, ip)
-         nt2 = real(sum(conjg(target) * target), dp)
-         if (nt2 < tol2) cycle
-         best_j = 0; proj = -1.0_dp
-         do jm = 1, n
-            if (matched(jm)) cycle
-            source = swapc(:, jm)
-            ns2 = real(sum(conjg(source) * source), dp)
-            if (ns2 < tol2) cycle
-            thr = sqrt(nt2 * ns2) - tol
-            if (abs(sum(conjg(target) * source)) > thr) then
-               if (abs(sum(conjg(target) * source)) > proj) then
-                  proj = abs(sum(conjg(target) * source)); best_j = jm
-               end if
-            end if
-         end do
-         if (best_j > 0) then
-            ridx = ip - n
-            Vm_re(:, ridx) = Vm(:, best_j)
-            evm_re(ridx)   = evm(best_j)
-            call phase_factor(n2, target, swapc(:, best_j), tol, phase)
-            alpham_re(ridx) = conjg(alphap(ip) * phase)
-            matched(best_j) = .true.
-         end if
-      end do
+      ! Loop 1: +q cols 1..n against -q cols n+1..2n; Loop 2: n+1..2n against 1..n.
+      call match_block(1, n, n + 1, n2, n)
+      call match_block(n + 1, n2, 1, n, -n)
 
       where (abs(alpham_re) < ZERO_MATRIX_ELEMENT_THRESHOLD) alpham_re = (0.0_dp, 0.0_dp)
+
+   contains
+
+      subroutine match_block(t_lo, t_hi, c_lo, c_hi, offset)
+         integer, intent(in) :: t_lo, t_hi, c_lo, c_hi, offset
+         integer          :: ng, gid(2*n), gsize(2*n), gused(2*n), nasg, asg_g(2*n)
+         complex(kind=cp) :: geig(2*n), asg(2*n, 2*n), target(2*n), proj(2*n), best_v(2*n)
+         complex(kind=cp) :: v(2*n), phase
+         integer          :: j, g, a, ip, best_g, ridx
+         real(kind=dp)    :: tol, nt, np_, best_n
+         logical          :: found
+
+         tol = EIGENVECTOR_MATCHING_THRESHOLD
+
+         ! Group the candidates into degenerate subspaces by eigenvalue (first
+         ! member's value; first matching group wins, as in the Python).
+         ng = 0
+         do j = c_lo, c_hi
+            found = .false.
+            do g = 1, ng
+               if (abs(evm(j) - geig(g)) < DEGENERACY_THRESHOLD * max(1.0_dp, abs(geig(g)))) then
+                  gid(j) = g; gsize(g) = gsize(g) + 1; found = .true.
+                  exit
+               end if
+            end do
+            if (.not. found) then
+               ng = ng + 1; geig(ng) = evm(j); gsize(ng) = 1; gused(ng) = 0; gid(j) = ng
+            end if
+         end do
+         nasg = 0
+
+         do ip = t_lo, t_hi
+            target = Vp(:, ip)
+            nt = sqrt(real(sum(conjg(target) * target), dp))
+            if (nt < tol) cycle
+
+            best_g = 0; best_n = -1.0_dp
+            do g = 1, ng
+               if (gused(g) >= gsize(g)) cycle              ! subspace exhausted
+               proj = (0.0_dp, 0.0_dp)
+               do j = c_lo, c_hi
+                  if (gid(j) /= g) cycle
+                  proj = proj + sum(conjg(swapc(:, j)) * target) * swapc(:, j)
+               end do
+               do a = 1, nasg
+                  if (asg_g(a) /= g) cycle
+                  proj = proj - sum(conjg(asg(:, a)) * proj) * asg(:, a)
+               end do
+               np_ = sqrt(real(sum(conjg(proj) * proj), dp))
+               if (best_g == 0 .or. np_ > best_n) then
+                  best_g = g; best_n = np_; best_v = proj
+               end if
+            end do
+
+            if (best_g == 0) cycle
+            if (best_n < nt - tol) cycle                    ! no matching subspace
+
+            v = best_v / best_n
+            gused(best_g) = gused(best_g) + 1
+            nasg = nasg + 1; asg(:, nasg) = v; asg_g(nasg) = best_g
+
+            ridx = ip + offset
+            ! undo the swap + conjugation (an involution)
+            Vm_re(1:n, ridx)    = conjg(v(n+1:n2))
+            Vm_re(n+1:n2, ridx) = conjg(v(1:n))
+            evm_re(ridx) = geig(best_g)
+            call phase_factor(n2, target, v, tol, phase)
+            alpham_re(ridx) = conjg(alphap(ip) * phase)
+         end do
+      end subroutine match_block
+
    end subroutine match_reorder
 
    !> phase = (first |.|>tol component of target) / (first such of source).
