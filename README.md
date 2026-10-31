@@ -59,6 +59,18 @@ needs it (`docs/INTERFACE.md`). Pinned in `tests/test_degenerate_and_gapless.py`
 pyMagCalc pins both backends to Sunny 0.8.1 and to the ferromagnetic chain's closed
 form. Builds older than this should be reinstalled.
 
+**Exact zero modes at antiferromagnetic Bragg points (2026-10-31).** There the
+Goldstone mode is a Jordan block, its true intensity diverges like 1/ω, and the
+convention is to report zero. `calc_alpha` did so only when the pseudo-norm fell
+under an absolute 1e-12, and rounding in H decides which side of that a lifted
+zero mode lands: zero, or a 1e6–1e9 spike. A mode is now also an exact zero mode
+when its energy is ≤ 1e-5 × max|H_ij| at that q and its pseudo-norm is < 1e-3
+(defective). A ferromagnet's Goldstone mode (pseudo-norm 1) is untouched. This
+is pyMagCalc's `linalg._calculate_alpha_matrix` rule, line for line. pyMagCalc
+pins it under both backends in `tests/test_zero_mode_rule.py`: zero intensity
+on a Néel chain's Bragg points lifted by noise up to 1e-11, the spike back when
+the rule is off, and the closed form next to the peak.
+
 **Speed (KFe3J / 8000 q-points, parity preserved):** the OpenMP compute kernel
 is **18–100× faster** than pyMagCalc's multiprocessing `calculate_sqw` — the win
 is eliminating Python per-q overhead (GIL, `multiprocessing`, per-q `lambdify`),

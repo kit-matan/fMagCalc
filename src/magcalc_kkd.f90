@@ -25,6 +25,15 @@ module magcalc_kkd
    real(kind=dp), parameter :: ZERO_MATRIX_ELEMENT_THRESHOLD  = 1.0e-6_dp
    real(kind=dp), parameter :: ALPHA_ZERO_NORM_WARN           = 1.0e-14_dp
    real(kind=dp), parameter :: EIGENVECTOR_MATCHING_THRESHOLD = 1.0e-4_dp
+   ! The exact-zero-mode rule of linalg._calculate_alpha_matrix: a mode whose energy
+   ! is below ZERO_MODE_ENERGY_REL x the scale of H at this q (its largest |entry|;
+   ! the largest eigenvalue is itself zero at a Neel chain's Bragg point) AND whose
+   ! pseudo-norm is below ZERO_MODE_NORM is a defective (Jordan) Goldstone mode at
+   ! an antiferromagnetic Bragg point, reported with zero intensity. Rounding puts
+   ! its energy at ~sqrt(eps) x scale and N_ii ~ omega / scale, so the absolute
+   ! |N_ii| < 1e-12 cut alone chose between 0 and a ~1e9 spike by rounding.
+   real(kind=dp), parameter :: ZERO_MODE_ENERGY_REL           = 1.0e-5_dp
+   real(kind=dp), parameter :: ZERO_MODE_NORM                 = 1.0e-3_dp
    complex(kind=cp), parameter :: II = (0.0_dp, 1.0_dp)
 
 contains
@@ -61,13 +70,13 @@ contains
       call diag_and_sort(n, hplus, evp, Vp, ierr)
       if (ierr /= 0) then; info = -1; return; end if
       call apply_gs(n2, evp, Vp)
-      call calc_alpha(n2, Vp, gdiag, alphap)
+      call calc_alpha(n2, Vp, gdiag, evp, maxval(abs(hplus)), alphap)
 
       ! 4. diagonalize + sort (-q),  5. GS,  6. alpha
       call diag_and_sort(n, hminus, evm, Vm, ierr)
       if (ierr /= 0) then; info = -2; return; end if
       call apply_gs(n2, evm, Vm)
-      call calc_alpha(n2, Vm, gdiag, alpham)
+      call calc_alpha(n2, Vm, gdiag, evm, maxval(abs(hminus)), alpham)
 
       ! 7. match & reorder -q to +q
       call match_reorder(n, Vp, alphap, Vm, evm, alpham, Vm_re, evm_re, alpham_re)
@@ -175,20 +184,27 @@ contains
       end if
    end subroutine apply_gs
 
-   !> _calculate_alpha_matrix: alpha_ii = sqrt(G_ii / N_ii), N_ii = V_i^H G V_i.
-   subroutine calc_alpha(m, evecs, gdiag, alpha)
+   !> _calculate_alpha_matrix: alpha_ii = sqrt(G_ii / N_ii), N_ii = V_i^H G V_i,
+   !> with the exact-zero-mode rule on the column eigenvalues `evals` and the
+   !> scale of H, `hscale` (its largest |entry|).
+   subroutine calc_alpha(m, evecs, gdiag, evals, hscale, alpha)
       integer,          intent(in)  :: m
       complex(kind=cp), intent(in)  :: evecs(m, m)
       real(kind=dp),    intent(in)  :: gdiag(m)
+      complex(kind=cp), intent(in)  :: evals(m)
+      real(kind=dp),    intent(in)  :: hscale
       complex(kind=cp), intent(out) :: alpha(m)
       integer       :: i
-      real(kind=dp) :: nii, gii, asq(m), zt2
+      real(kind=dp) :: nii, gii, asq(m), zt2, ezero
 
       zt2 = ZERO_MATRIX_ELEMENT_THRESHOLD**2
+      ezero = ZERO_MODE_ENERGY_REL * hscale
       do i = 1, m
          nii = real(sum(conjg(evecs(:, i)) * gdiag * evecs(:, i)), dp)
          gii = gdiag(i)
-         if (abs(nii) < zt2) then
+         if (abs(real(evals(i), dp)) <= ezero .and. abs(nii) < ZERO_MODE_NORM) then
+            asq(i) = 0.0_dp
+         else if (abs(nii) < zt2) then
             asq(i) = 0.0_dp
          else if (gii * nii < -zt2) then
             asq(i) = 0.0_dp
