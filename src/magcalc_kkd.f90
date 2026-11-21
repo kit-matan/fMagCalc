@@ -168,7 +168,10 @@ contains
             blk = e0 - s0 + 1
             allocate(block(m, blk)); block = evecs(:, s0:e0)
             call qr_orthonormal(m, blk, block, ierr)
-            if (ierr == 0) evecs(:, s0:e0) = block
+            if (ierr == 0) then
+               call g_orthogonalize(m, blk, block)
+               evecs(:, s0:e0) = block
+            end if
             deallocate(block)
             deg = 0
          end if
@@ -179,10 +182,60 @@ contains
          blk = e0 - s0 + 1
          allocate(block(m, blk)); block = evecs(:, s0:e0)
          call qr_orthonormal(m, blk, block, ierr)
-         if (ierr == 0) evecs(:, s0:e0) = block
+         if (ierr == 0) then
+            call g_orthogonalize(m, blk, block)
+            evecs(:, s0:e0) = block
+         end if
          deallocate(block)
       end if
    end subroutine apply_gs
+
+   !> linalg._orthonormalize_degenerate_block, after the QR: make the block
+   !> orthogonal in the bosonic metric g = diag(1, -1). The Bogoliubov transform
+   !> needs T^H g T = g; Euclidean orthogonality gives that only when the block's
+   !> modes share one u/v ratio (a symmetry-related pair). At an ACCIDENTAL
+   !> degeneracy they do not, and the group's summed intensity came out wrong (up
+   !> to 12 % against NumPy/Colpa on a two-mode test). The Euclidean basis Q is
+   !> rotated by the eigenvectors of Q^H g Q -- only when that matrix is not
+   !> already diagonal, so symmetry-related blocks are left exactly as they were.
+   subroutine g_orthogonalize(m, blk, q)
+      integer,          intent(in)    :: m, blk
+      complex(kind=cp), intent(inout) :: q(m, blk)
+      real(kind=dp), parameter :: REL_TOL = 1.0e-8_dp
+      complex(kind=cp) :: mm(blk, blk), wq(1)
+      complex(kind=cp), allocatable :: work(:)
+      real(kind=dp)    :: w(blk), rwork(max(1, 3*blk - 2)), off, dmax
+      integer          :: i, j, nh, lwork, ierr
+
+      if (blk < 2 .or. mod(m, 2) /= 0) return
+      nh = m / 2
+      do j = 1, blk
+         do i = 1, blk
+            mm(i, j) = sum(conjg(q(1:nh, i)) * q(1:nh, j)) &
+                     - sum(conjg(q(nh+1:m, i)) * q(nh+1:m, j))
+         end do
+      end do
+      off = 0.0_dp; dmax = 0.0_dp
+      do j = 1, blk
+         do i = 1, blk
+            if (i == j) then
+               dmax = max(dmax, abs(mm(i, i)))
+            else
+               off = max(off, abs(mm(i, j)))
+            end if
+         end do
+      end do
+      if (off <= REL_TOL * max(dmax, tiny(1.0_dp))) return
+
+      mm = 0.5_dp * (mm + conjg(transpose(mm)))
+      call zheev('V', 'U', blk, mm, blk, w, wq, -1, rwork, ierr)
+      lwork = max(1, int(real(wq(1))))
+      allocate(work(lwork))
+      call zheev('V', 'U', blk, mm, blk, w, work, lwork, rwork, ierr)
+      deallocate(work)
+      if (ierr /= 0) return
+      q = matmul(q, mm)
+   end subroutine g_orthogonalize
 
    !> _calculate_alpha_matrix: alpha_ii = sqrt(G_ii / N_ii), N_ii = V_i^H G V_i,
    !> with the exact-zero-mode rule on the column eigenvalues `evals` and the

@@ -78,3 +78,39 @@ def test_small_but_nonzero_energies_keep_their_closed_form_intensity():
     for q, I in zip(qs, r.intensities):
         qz = q[2] / np.linalg.norm(q)
         assert np.real(I[0]) == pytest.approx(0.5 * (1 + qz ** 2), rel=1e-9)
+
+
+# --------------------------------------------------------------------------
+# Accidental degeneracy: the block must be orthogonal in the bosonic metric
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("theta,phi", [(0.0, 0.0), (0.4, 0.0), (0.7, 0.0), (0.7, 0.9),
+                                       (1.1, 0.3)])
+def test_accidentally_degenerate_pair_total_equals_colpa(theta, phi):
+    """Two modes at one energy with DIFFERENT u/v ratios, mixed by a site rotation.
+
+    `apply_gs` orthonormalized a degenerate block with a Euclidean QR, which is
+    orthogonal in the metric g = diag(1, -1) only for a symmetry-related pair (one
+    u/v ratio) -- every degenerate case above. Here it is not, and the pair's total
+    was 2-12 % off pyMagCalc's Colpa path (paraunitary by construction) until
+    `g_orthogonalize` (2026-11-21), the port of pyMagCalc's
+    `linalg._orthonormalize_degenerate_block`. theta = 0 is the unmixed control."""
+    from magcalc.numerical import colpa_amplitudes_from_h
+
+    A_ = np.diag([2.5, np.sqrt(13.0)])
+    B_ = np.diag([1.5, 3.0])
+    c, s = np.cos(theta), np.sin(theta)
+    U = np.array([[c, -s * np.exp(1j * phi)], [s * np.exp(-1j * phi), c]])
+    A2 = U.conj().T @ A_ @ U
+    B2 = U.conj().T @ B_ @ U.conj()
+    H2 = np.block([[A2, B2], [B2.conj().T, A2.conj()]])
+    g = np.diag([1, 1, -1, -1.0])
+    P = np.block([[np.zeros((2, 2)), np.eye(2)], [np.eye(2), np.zeros((2, 2))]])
+    Hp, Hm = g @ H2, g @ (P @ H2.conj() @ P)
+    ud = np.linalg.qr(np.random.default_rng(0).normal(size=(6, 6)))[0].astype(complex)
+    q = np.array([[0.3, 0.1, 0.2]])
+
+    out = fmagcalc.run_sqw(Hp[None], Hm[None], ud, np.ones((1, 2)), 0.5, q)
+    assert np.allclose(out["energies"][0], 2.0, atol=1e-9)
+    amps = colpa_amplitudes_from_h(Hp[None], q, ud, np.full(2, 0.5))
+    ref = float(np.sum(amps.contract(q, "perp")[0]))
+    assert float(out["intensities"][0].sum()) == pytest.approx(ref, rel=1e-10)
